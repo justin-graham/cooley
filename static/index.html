@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Corporate Governance Audit Platform</title>
+    <meta name="description" content="AI-powered platform for automating corporate legal document audits">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <!-- HEADER -->
+    <header>
+        <h1>Corporate Governance Audit Platform</h1>
+        <p class="subtitle">
+            AI-powered document analysis. Upload a .zip of corporate documents (PDF, DOCX, XLSX, PPTX)
+            and receive a structured audit in minutes instead of 40+ hours of manual review.
+        </p>
+    </header>
+
+    <!-- UPLOAD SECTION -->
+    <section id="upload-section">
+        <div id="upload-zone">
+            <div class="upload-icon">📁</div>
+            <p class="primary-text">Drop your .zip file here or click to browse</p>
+            <p class="secondary-text">Maximum file size: 50MB</p>
+        </div>
+        <input type="file" id="file-input" accept=".zip" style="display: none;">
+    </section>
+
+    <!-- PROGRESS SECTION -->
+    <section id="progress" class="section">
+        <div class="spinner"></div>
+        <span id="progress-text">Processing...</span>
+    </section>
+
+    <!-- RESULTS SECTION -->
+    <section id="results">
+        <!-- Company Header -->
+        <div class="company-header">
+            <h1 class="company-name" id="company-name">Company Name</h1>
+            <p class="company-subtitle monospace">Governance Audit Report</p>
+        </div>
+
+        <!-- Document Categories -->
+        <div class="section">
+            <h2>Document Inventory</h2>
+            <div id="documents-content"></div>
+        </div>
+
+        <!-- Timeline -->
+        <div class="grid">
+            <div class="col-6">
+                <div class="section">
+                    <h2>Corporate Timeline</h2>
+                    <div id="timeline-content"></div>
+                </div>
+            </div>
+
+            <!-- Cap Table -->
+            <div class="col-6">
+                <div class="section">
+                    <h2>Capitalization Table (Draft)</h2>
+                    <div id="cap-table-content"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Issues Tracker -->
+        <div class="section">
+            <h2>Issues & Recommendations</h2>
+            <div id="issues-content"></div>
+        </div>
+
+        <!-- Failed Documents (if any) -->
+        <div id="failed-section" class="section" style="display: none;">
+            <h2>Failed to Parse</h2>
+            <p class="mb-md monospace" style="font-size: 0.875rem; color: var(--text-secondary);">
+                The following documents could not be processed:
+            </p>
+            <div id="failed-docs-content"></div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer style="margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border); text-align: center;">
+        <p class="monospace" style="font-size: 0.75rem; color: var(--text-secondary);">
+            Corporate Governance Audit Platform v1.0 | Powered by Claude 3.5 Sonnet
+        </p>
+    </footer>
+
+    <!-- JavaScript -->
+    <script src="/static/script.js"></script>
+</body>
+</html>

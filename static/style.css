@@ -1,0 +1,458 @@
+/*
+Corporate Governance Audit Platform - Swiss Design System
+Principles: Clarity, Grid Structure, Minimal, Bold Accent
+Typography: Space Grotesk (grotesk) + Space Mono (monospace)
+Accent: #D42B1E (red)
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@700&family=Space+Mono:wght@400;700&display=swap');
+
+/* ============================================================================
+   DESIGN TOKENS
+   ============================================================================ */
+
+:root {
+    /* Colors */
+    --bg: #FFFFFF;
+    --text: #000000;
+    --text-secondary: #666666;
+    --border: #E0E0E0;
+    --accent: #D42B1E;  /* Red accent */
+    --accent-light: rgba(212, 43, 30, 0.1);
+    --accent-glow: rgba(212, 43, 30, 0.3);
+
+    /* Typography */
+    --font-grotesk: 'Space Grotesk', 'Helvetica Neue', sans-serif;
+    --font-mono: 'Space Mono', 'Courier New', monospace;
+
+    /* Grid System (8px base) */
+    --grid: 8px;
+    --spacing-xs: calc(var(--grid) * 1);
+    --spacing-sm: calc(var(--grid) * 2);
+    --spacing-md: calc(var(--grid) * 3);
+    --spacing-lg: calc(var(--grid) * 4);
+    --spacing-xl: calc(var(--grid) * 6);
+}
+
+/* ============================================================================
+   RESET & BASE
+   ============================================================================ */
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: var(--font-mono);
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    padding: var(--spacing-lg);
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+/* ============================================================================
+   TYPOGRAPHY
+   ============================================================================ */
+
+h1, h2, h3, h4, h5, h6 {
+    font-family: var(--font-grotesk);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    line-height: 1.2;
+}
+
+h1 {
+    font-size: 2.5rem;
+    color: var(--accent);
+    margin-bottom: var(--spacing-md);
+    text-shadow: 0 0 20px var(--accent-glow);
+}
+
+h2 {
+    font-size: 1.5rem;
+    color: var(--accent);
+    margin: var(--spacing-xl) 0 var(--spacing-md);
+    border-bottom: 2px solid var(--border);
+    padding-bottom: var(--spacing-xs);
+}
+
+h3 {
+    font-size: 1.125rem;
+    margin: var(--spacing-lg) 0 var(--spacing-sm);
+    color: var(--text);
+}
+
+p {
+    margin-bottom: var(--spacing-md);
+}
+
+.subtitle {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-lg);
+}
+
+.monospace {
+    font-family: var(--font-mono);
+}
+
+/* ============================================================================
+   LAYOUT CONTAINERS
+   ============================================================================ */
+
+.container {
+    width: 100%;
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.section {
+    margin-bottom: var(--spacing-xl);
+    padding: var(--spacing-lg);
+    border: 1px solid var(--border);
+    background: var(--bg);
+}
+
+.grid {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    gap: var(--spacing-md);
+}
+
+.col-12 { grid-column: span 12; }
+.col-6 { grid-column: span 6; }
+.col-4 { grid-column: span 4; }
+.col-3 { grid-column: span 3; }
+
+@media (max-width: 768px) {
+    .col-6, .col-4, .col-3 {
+        grid-column: span 12;
+    }
+}
+
+/* ============================================================================
+   UPLOAD ZONE
+   ============================================================================ */
+
+#upload-zone {
+    border: 2px dashed var(--border);
+    padding: var(--spacing-xl);
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    background: var(--bg);
+}
+
+#upload-zone:hover {
+    border-color: var(--accent);
+    background: var(--accent-light);
+}
+
+#upload-zone.dragging {
+    border-color: var(--accent);
+    background: var(--accent-light);
+    border-style: solid;
+}
+
+#upload-zone .upload-icon {
+    font-size: 3rem;
+    color: var(--text-secondary);
+    margin-bottom: var(--spacing-sm);
+}
+
+#upload-zone p {
+    margin: 0;
+    font-family: var(--font-mono);
+}
+
+#upload-zone .primary-text {
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: var(--spacing-xs);
+}
+
+#upload-zone .secondary-text {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+}
+
+/* ============================================================================
+   PROGRESS DISPLAY
+   ============================================================================ */
+
+#progress {
+    display: none;
+    margin: var(--spacing-lg) 0;
+    padding: var(--spacing-lg);
+    border: 2px solid var(--accent);
+    background: var(--accent-light);
+}
+
+#progress-text {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 1rem;
+}
+
+.spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: var(--spacing-sm);
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================================
+   RESULTS DISPLAY
+   ============================================================================ */
+
+#results {
+    display: none;
+}
+
+.company-header {
+    text-align: center;
+    padding: var(--spacing-xl) 0;
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: var(--spacing-xl);
+}
+
+.company-name {
+    font-size: 2rem;
+    color: var(--accent);
+}
+
+.company-subtitle {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-top: var(--spacing-xs);
+}
+
+/* ============================================================================
+   TABLES
+   ============================================================================ */
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: var(--spacing-md) 0;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+th, td {
+    text-align: left;
+    padding: var(--spacing-sm);
+    border-bottom: 1px solid var(--border);
+}
+
+th {
+    font-weight: 700;
+    background: #F5F5F5;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+}
+
+tr:hover {
+    background: var(--accent-light);
+}
+
+/* ============================================================================
+   TIMELINE
+   ============================================================================ */
+
+.timeline-event {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: var(--spacing-md);
+    padding: var(--spacing-sm) 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.timeline-event:last-child {
+    border-bottom: none;
+}
+
+.timeline-date {
+    font-family: var(--font-mono);
+    font-weight: 700;
+    color: var(--accent);
+    font-size: 0.875rem;
+}
+
+.timeline-description {
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+    color: var(--text);
+}
+
+/* ============================================================================
+   ISSUES
+   ============================================================================ */
+
+.issue {
+    padding: var(--spacing-md);
+    margin: var(--spacing-sm) 0;
+    border-left: 4px solid var(--accent);
+    background: var(--accent-light);
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+.issue.critical {
+    border-left-width: 6px;
+    border-left-color: var(--accent);
+    background: var(--accent-light);
+}
+
+.issue.warning {
+    border-left-color: #FFA500;
+    background: rgba(255, 165, 0, 0.1);
+}
+
+.issue.note {
+    border-left-color: var(--text-secondary);
+    background: rgba(102, 102, 102, 0.1);
+}
+
+.issue-category {
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.75rem;
+    letter-spacing: 0.05em;
+    margin-bottom: var(--spacing-xs);
+}
+
+.issue-description {
+    color: var(--text);
+}
+
+/* ============================================================================
+   DOCUMENT LIST
+   ============================================================================ */
+
+.document-category {
+    margin-bottom: var(--spacing-lg);
+}
+
+.document-category h3 {
+    font-size: 1rem;
+    margin-bottom: var(--spacing-sm);
+}
+
+.document-list {
+    list-style: none;
+    font-family: var(--font-mono);
+    font-size: 0.875rem;
+}
+
+.document-list li {
+    padding: var(--spacing-xs) 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.document-list li:last-child {
+    border-bottom: none;
+}
+
+.error-badge {
+    color: var(--accent);
+    font-weight: 700;
+    margin-left: var(--spacing-xs);
+}
+
+/* ============================================================================
+   BUTTONS
+   ============================================================================ */
+
+button, .button {
+    font-family: var(--font-grotesk);
+    text-transform: uppercase;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+    font-size: 0.875rem;
+}
+
+button:hover:not(:disabled), .button:hover {
+    opacity: 0.85;
+}
+
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+/* ============================================================================
+   UTILITY CLASSES
+   ============================================================================ */
+
+.hidden {
+    display: none !important;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-accent {
+    color: var(--accent);
+}
+
+.mb-0 { margin-bottom: 0; }
+.mb-sm { margin-bottom: var(--spacing-sm); }
+.mb-md { margin-bottom: var(--spacing-md); }
+.mb-lg { margin-bottom: var(--spacing-lg); }
+
+.mt-0 { margin-top: 0; }
+.mt-sm { margin-top: var(--spacing-sm); }
+.mt-md { margin-top: var(--spacing-md); }
+.mt-lg { margin-top: var(--spacing-lg); }
+
+/* ============================================================================
+   RESPONSIVE
+   ============================================================================ */
+
+@media (max-width: 768px) {
+    body {
+        padding: var(--spacing-md);
+    }
+
+    h1 {
+        font-size: 2rem;
+    }
+
+    h2 {
+        font-size: 1.25rem;
+    }
+
+    .timeline-event {
+        grid-template-columns: 1fr;
+        gap: var(--spacing-xs);
+    }
+
+    .timeline-date {
+        font-size: 0.75rem;
+    }
+}
