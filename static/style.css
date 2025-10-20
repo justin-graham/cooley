@@ -73,6 +73,10 @@ h1 {
     text-shadow: 0 0 20px var(--accent-glow);
 }
 
+header h1 {
+    max-width: 600px;
+}
+
 h2 {
     font-size: 1.5rem;
     color: var(--accent);
@@ -141,29 +145,56 @@ p {
    ============================================================================ */
 
 #upload-zone {
-    border: 2px dashed var(--border);
     padding: var(--spacing-xl);
     text-align: center;
     cursor: pointer;
     transition: all 0.2s ease;
-    background: var(--bg);
+    background:
+        linear-gradient(var(--border), var(--border)) 0 0 / 32px 2px,
+        linear-gradient(var(--border), var(--border)) 0 0 / 2px 32px,
+        linear-gradient(var(--border), var(--border)) 100% 0 / 32px 2px,
+        linear-gradient(var(--border), var(--border)) 100% 0 / 2px 32px,
+        linear-gradient(var(--border), var(--border)) 0 100% / 32px 2px,
+        linear-gradient(var(--border), var(--border)) 0 100% / 2px 32px,
+        linear-gradient(var(--border), var(--border)) 100% 100% / 32px 2px,
+        linear-gradient(var(--border), var(--border)) 100% 100% / 2px 32px;
+    background-repeat: no-repeat;
 }
 
 #upload-zone:hover {
-    border-color: var(--accent);
-    background: var(--accent-light);
+    background:
+        linear-gradient(var(--accent), var(--accent)) 0 0 / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 0 0 / 2px 32px,
+        linear-gradient(var(--accent), var(--accent)) 100% 0 / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 100% 0 / 2px 32px,
+        linear-gradient(var(--accent), var(--accent)) 0 100% / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 0 100% / 2px 32px,
+        linear-gradient(var(--accent), var(--accent)) 100% 100% / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 100% 100% / 2px 32px,
+        var(--accent-light);
+    background-repeat: no-repeat;
 }
 
 #upload-zone.dragging {
-    border-color: var(--accent);
-    background: var(--accent-light);
-    border-style: solid;
+    background:
+        linear-gradient(var(--accent), var(--accent)) 0 0 / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 0 0 / 2px 32px,
+        linear-gradient(var(--accent), var(--accent)) 100% 0 / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 100% 0 / 2px 32px,
+        linear-gradient(var(--accent), var(--accent)) 0 100% / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 0 100% / 2px 32px,
+        linear-gradient(var(--accent), var(--accent)) 100% 100% / 32px 2px,
+        linear-gradient(var(--accent), var(--accent)) 100% 100% / 2px 32px,
+        var(--accent-light);
+    background-repeat: no-repeat;
 }
 
 #upload-zone .upload-icon {
-    font-size: 3rem;
+    width: 120px;
+    height: 120px;
     color: var(--text-secondary);
-    margin-bottom: var(--spacing-sm);
+    margin: 0 auto var(--spacing-md);
+    display: block;
 }
 
 #upload-zone p {
