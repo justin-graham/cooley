@@ -8,6 +8,7 @@ import zipfile
 import tempfile
 from typing import List, Dict, Any
 import pymupdf4llm
+import pymupdf as fitz
 from docx import Document
 import pandas as pd
 from pptx import Presentation
@@ -55,6 +56,33 @@ def extract_from_pdf(file_path: str) -> str:
     # pymupdf4llm returns markdown-formatted text, preserving tables and structure
     markdown_text = pymupdf4llm.to_markdown(file_path)
     return markdown_text
+
+
+def extract_from_pdf_fallback(file_path: str) -> str:
+    """
+    Fast fallback PDF text extraction using basic PyMuPDF.
+    Used when pymupdf4llm times out on complex documents.
+
+    Args:
+        file_path: Path to PDF file
+
+    Returns:
+        Extracted plain text string
+
+    Raises:
+        Exception if extraction fails
+    """
+    doc = fitz.open(file_path)
+    text_parts = []
+
+    for page_num in range(len(doc)):
+        page = doc[page_num]
+        text = page.get_text()
+        if text.strip():
+            text_parts.append(f"--- Page {page_num + 1} ---\n{text}")
+
+    doc.close()
+    return '\n\n'.join(text_parts)
 
 
 def extract_from_docx(file_path: str) -> str:

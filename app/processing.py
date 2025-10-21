@@ -10,14 +10,14 @@ import os
 import json
 import logging
 from typing import List, Dict, Any
-from anthropic import Anthropic
+from anthropic import Anthropic, APITimeoutError, APIError
 from app import db, prompts
 
 logger = logging.getLogger(__name__)
 
 
-# Initialize Claude client
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+# Initialize Claude client with 60 second timeout
+client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=60.0)
 
 
 def call_claude(prompt: str, max_tokens: int = 2048) -> str:
@@ -30,17 +30,28 @@ def call_claude(prompt: str, max_tokens: int = 2048) -> str:
 
     Returns:
         Response text from Claude
-    """
-    message = client.messages.create(
-        model="claude-sonnet-4-5-20250929",
-        max_tokens=max_tokens,
-        messages=[{
-            "role": "user",
-            "content": prompt
-        }]
-    )
 
-    return message.content[0].text
+    Raises:
+        APITimeoutError: If the request times out (60 seconds)
+        APIError: If there's an API error
+    """
+    try:
+        message = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=max_tokens,
+            messages=[{
+                "role": "user",
+                "content": prompt
+            }]
+        )
+        return message.content[0].text
+
+    except APITimeoutError as e:
+        logger.error(f"Claude API timeout after 60 seconds: {e}")
+        raise
+    except APIError as e:
+        logger.error(f"Claude API error: {e}")
+        raise
 
 
 def parse_json_response(response_text: str) -> Any:
@@ -370,6 +381,9 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
                 db.update_progress(audit_id, f"Pass 1: Classifying documents... {i}/{total_docs}")
             except Exception as e:
                 logger.error(f"Failed to update progress: {e}")
+
+            # Log which document is being classified
+            logger.info(f"Classifying document {i}/{total_docs}: {doc.get('filename', 'unknown')}")
 
             classified_doc = classify_document(doc)
             classified_docs.append(classified_doc)

@@ -212,27 +212,53 @@ async def process_documents_task(audit_id: str, zip_path: str):
             # Parse with timeout to prevent hanging
             logger.info(f"Parsing document {i}/{len(file_paths)}: {filename}")
 
-            with ThreadPoolExecutor(max_workers=1) as executor:
-                future = executor.submit(utils.parse_document, file_path)
-                try:
-                    doc = future.result(timeout=30)  # 30 second timeout per document
-                    logger.info(f"Successfully parsed: {filename}")
-                except TimeoutError:
-                    logger.error(f"Timeout parsing {filename} after 30 seconds")
+            executor = ThreadPoolExecutor(max_workers=1)
+            future = executor.submit(utils.parse_document, file_path)
+            try:
+                doc = future.result(timeout=30)  # 30 second timeout per document
+                logger.info(f"Successfully parsed: {filename}")
+            except TimeoutError:
+                logger.error(f"Timeout parsing {filename} after 30 seconds")
+
+                # Try fallback extraction for PDFs
+                file_ext = os.path.splitext(filename)[1].lower()
+                if file_ext == '.pdf':
+                    logger.info(f"Attempting fallback extraction for {filename}")
+                    try:
+                        text = utils.extract_from_pdf_fallback(file_path)
+                        doc = {
+                            'filename': filename,
+                            'type': 'pdf',
+                            'text': text,
+                            'summary': 'Parsed with fast fallback method (markdown structure not preserved)'
+                        }
+                        logger.info(f"Fallback extraction succeeded for {filename}")
+                    except Exception as fallback_error:
+                        logger.error(f"Fallback extraction also failed for {filename}: {fallback_error}")
+                        doc = {
+                            'filename': filename,
+                            'type': 'pdf',
+                            'text': '',
+                            'error': f'Timeout after 30s, fallback also failed: {str(fallback_error)}'
+                        }
+                else:
                     doc = {
                         'filename': filename,
-                        'type': os.path.splitext(filename)[1].lstrip('.'),
+                        'type': file_ext.lstrip('.'),
                         'text': '',
                         'error': 'Document parsing timed out after 30 seconds'
                     }
-                except Exception as e:
-                    logger.error(f"Error parsing {filename}: {e}")
-                    doc = {
-                        'filename': filename,
-                        'type': os.path.splitext(filename)[1].lstrip('.'),
-                        'text': '',
-                        'error': f'Parsing failed: {str(e)}'
-                    }
+            except Exception as e:
+                logger.error(f"Error parsing {filename}: {e}")
+                doc = {
+                    'filename': filename,
+                    'type': os.path.splitext(filename)[1].lstrip('.'),
+                    'text': '',
+                    'error': f'Parsing failed: {str(e)}'
+                }
+            finally:
+                # Don't wait for stuck threads to finish
+                executor.shutdown(wait=False, cancel_futures=True)
 
             documents.append(doc)
 
