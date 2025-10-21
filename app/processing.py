@@ -8,9 +8,12 @@ Pass 3: Synthesize cross-document insights (timeline, cap table, issues)
 
 import os
 import json
+import logging
 from typing import List, Dict, Any
 from anthropic import Anthropic
 from app import db, prompts
+
+logger = logging.getLogger(__name__)
 
 
 # Initialize Claude client
@@ -208,6 +211,8 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
         return timeline
 
     except Exception as e:
+        logger.error(f"Timeline synthesis failed: {e}", exc_info=True)
+        print(f"ERROR: Timeline synthesis failed: {e}")
         return [{'date': '', 'event_type': 'error', 'description': f'Timeline generation failed: {str(e)}', 'source_docs': []}]
 
 
@@ -259,6 +264,8 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
         return cap_table
 
     except Exception as e:
+        logger.error(f"Cap table synthesis failed: {e}", exc_info=True)
+        print(f"ERROR: Cap table synthesis failed: {e}")
         return [{'shareholder': 'Error', 'shares': 0, 'share_class': 'N/A', 'ownership_pct': 0.0}]
 
 
@@ -294,6 +301,8 @@ def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, A
         return issues
 
     except Exception as e:
+        logger.error(f"Issue generation failed: {e}", exc_info=True)
+        print(f"ERROR: Issue generation failed: {e}")
         return [{'severity': 'critical', 'category': 'System Error', 'description': f'Issue analysis failed: {str(e)}'}]
 
 
@@ -346,18 +355,33 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
     """
     try:
         total_docs = len(documents)
+        logger.info(f"Starting 3-pass processing for {total_docs} documents")
 
         # ========== PASS 1: CLASSIFICATION ==========
-        db.update_progress(audit_id, "Pass 1: Classifying documents...")
+        try:
+            db.update_progress(audit_id, "Pass 1: Classifying documents...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+            print(f"ERROR: Failed to update progress: {e}")
 
         classified_docs = []
         for i, doc in enumerate(documents, start=1):
-            db.update_progress(audit_id, f"Classifying document {i}/{total_docs}: {doc['filename']}")
+            try:
+                db.update_progress(audit_id, f"Pass 1: Classifying documents... {i}/{total_docs}")
+            except Exception as e:
+                logger.error(f"Failed to update progress: {e}")
+
             classified_doc = classify_document(doc)
             classified_docs.append(classified_doc)
 
+        logger.info(f"Pass 1 complete: Classified {total_docs} documents")
+
         # ========== PASS 2: EXTRACTION ==========
-        db.update_progress(audit_id, "Pass 2: Extracting structured data...")
+        try:
+            db.update_progress(audit_id, "Pass 2: Extracting structured data...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+            print(f"ERROR: Failed to update progress: {e}")
 
         extractions = []
         for i, doc in enumerate(classified_docs, start=1):
@@ -365,23 +389,47 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
                 extractions.append(doc)
                 continue
 
-            db.update_progress(audit_id, f"Extracting data from document {i}/{total_docs}: {doc['filename']}")
+            try:
+                db.update_progress(audit_id, f"Pass 2: Extracting data... {i}/{total_docs}")
+            except Exception as e:
+                logger.error(f"Failed to update progress: {e}")
 
             extracted_data = extract_by_type(doc)
             extractions.append({**doc, **extracted_data})
 
+        logger.info(f"Pass 2 complete: Extracted data from {total_docs} documents")
+
         # ========== PASS 3: SYNTHESIS ==========
-        db.update_progress(audit_id, "Pass 3: Building timeline...")
+        try:
+            db.update_progress(audit_id, "Pass 3: Building timeline...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+            print(f"ERROR: Failed to update progress: {e}")
+
         timeline = synthesize_timeline(extractions)
 
-        db.update_progress(audit_id, "Pass 3: Generating cap table...")
+        try:
+            db.update_progress(audit_id, "Pass 3: Generating cap table...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+
         cap_table = synthesize_cap_table(extractions)
 
-        db.update_progress(audit_id, "Pass 3: Analyzing for issues...")
+        try:
+            db.update_progress(audit_id, "Pass 3: Analyzing for issues...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+
         issues = generate_issues(classified_docs, cap_table, timeline)
 
-        db.update_progress(audit_id, "Extracting company name...")
+        try:
+            db.update_progress(audit_id, "Pass 3: Extracting company name...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+
         company_name = extract_company_name(extractions)
+
+        logger.info(f"Pass 3 complete: Generated timeline, cap table, and issues")
 
         # ========== SAVE RESULTS ==========
         failed_docs = [d for d in classified_docs if d.get('error')]
@@ -395,5 +443,13 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
             'failed_documents': failed_docs
         })
 
+        logger.info(f"Audit {audit_id} completed successfully")
+
     except Exception as e:
-        db.mark_error(audit_id, str(e))
+        logger.error(f"Processing error in audit {audit_id}: {e}", exc_info=True)
+        print(f"ERROR: Processing failed for audit {audit_id}: {e}")
+        try:
+            db.mark_error(audit_id, str(e))
+        except Exception as db_error:
+            logger.error(f"Failed to mark error in database: {db_error}")
+            print(f"CRITICAL: Failed to mark error in database: {db_error}")

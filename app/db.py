@@ -5,9 +5,12 @@ Uses Postgres with psycopg2 for simple, reliable connections.
 
 import os
 import json
+import logging
 import psycopg2
 from psycopg2.extras import Json, RealDictCursor
 from typing import Optional, Dict, Any
+
+logger = logging.getLogger(__name__)
 
 
 def get_connection():
@@ -43,21 +46,27 @@ def create_audit(audit_id: str) -> None:
 def update_progress(audit_id: str, progress_message: str) -> None:
     """
     Update the progress message for an audit (for real-time frontend updates).
+    Failures are logged but don't raise exceptions to avoid crashing the pipeline.
 
     Args:
         audit_id: UUID of the audit
         progress_message: Human-readable progress text (e.g., "Classifying document 12/47...")
     """
-    conn = get_connection()
     try:
-        with conn.cursor() as cur:
-            cur.execute(
-                "UPDATE audits SET progress = %s WHERE id = %s",
-                (progress_message, audit_id)
-            )
-        conn.commit()
-    finally:
-        conn.close()
+        conn = get_connection()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE audits SET progress = %s WHERE id = %s",
+                    (progress_message, audit_id)
+                )
+            conn.commit()
+        finally:
+            conn.close()
+    except Exception as e:
+        # Log error but don't crash - progress updates are non-critical
+        logger.error(f"Failed to update progress for audit {audit_id}: {e}")
+        print(f"WARNING: Failed to update progress for audit {audit_id}: {e}")
 
 
 def update_audit_results(audit_id: str, results: Dict[str, Any]) -> None:

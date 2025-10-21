@@ -72,7 +72,7 @@ async function handleFileUpload(file) {
     // Show progress section
     uploadSection.style.display = 'none';
     progressSection.style.display = 'block';
-    progressText.textContent = 'Uploading...';
+    progressText.textContent = 'Processing documents...';
 
     try {
         // Upload file

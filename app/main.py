@@ -11,6 +11,7 @@ import os
 import uuid
 import shutil
 import tempfile
+import logging
 from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -170,10 +171,17 @@ async def process_documents_task(audit_id: str, zip_path: str):
         zip_path: Path to the uploaded zip file
     """
     extract_dir = None
+    logger = logging.getLogger(__name__)
 
     try:
+        logger.info(f"Starting processing for audit {audit_id}")
+
         # Update progress
-        db.update_progress(audit_id, "Extracting files from archive...")
+        try:
+            db.update_progress(audit_id, "Extracting files from archive...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+            print(f"ERROR: Failed to update progress for {audit_id}: {e}")
 
         # Unzip files
         file_paths = utils.unzip_file(zip_path)
@@ -182,24 +190,45 @@ async def process_documents_task(audit_id: str, zip_path: str):
         if not file_paths:
             raise ValueError("No files found in the archive")
 
-        db.update_progress(audit_id, f"Found {len(file_paths)} files. Parsing documents...")
+        logger.info(f"Extracted {len(file_paths)} files for audit {audit_id}")
+
+        try:
+            db.update_progress(audit_id, f"Found {len(file_paths)} files. Parsing documents...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+            print(f"ERROR: Failed to update progress: {e}")
 
         # Parse each document
         documents = []
         for i, file_path in enumerate(file_paths, start=1):
-            db.update_progress(audit_id, f"Parsing document {i}/{len(file_paths)}...")
+            try:
+                db.update_progress(audit_id, f"Parsing documents... {i}/{len(file_paths)}")
+            except Exception as e:
+                logger.error(f"Failed to update progress: {e}")
+
             doc = utils.parse_document(file_path)
             documents.append(doc)
 
         if not documents:
             raise ValueError("No parseable documents found")
 
+        logger.info(f"Parsed {len(documents)} documents for audit {audit_id}")
+
         # Run AI processing pipeline
         await processing.process_audit(audit_id, documents)
 
+        logger.info(f"Successfully completed audit {audit_id}")
+
     except Exception as e:
+        logger.error(f"Processing failed for audit {audit_id}: {e}", exc_info=True)
+        print(f"ERROR: Processing failed for audit {audit_id}: {e}")
+
         # Mark audit as failed
-        db.mark_error(audit_id, str(e))
+        try:
+            db.mark_error(audit_id, str(e))
+        except Exception as db_error:
+            logger.error(f"Failed to mark error in database: {db_error}")
+            print(f"CRITICAL: Failed to mark error in database for {audit_id}: {db_error}")
 
     finally:
         # Cleanup: delete temp files
@@ -219,6 +248,12 @@ async def process_documents_task(audit_id: str, zip_path: str):
 @app.on_event("startup")
 async def startup_event():
     """Run on application startup."""
+    # Configure logging
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
     print("🚀 Corporate Governance Audit Platform API started")
     print(f"📊 Database: {os.getenv('DATABASE_URL', 'Not configured')[:50]}...")
     print(f"🤖 Claude API: {'Configured' if os.getenv('ANTHROPIC_API_KEY') else 'NOT CONFIGURED'}")
