@@ -152,7 +152,7 @@ p {
     padding: calc(var(--spacing-xl) + 6px);
     text-align: center;
     cursor: pointer;
-    transition: all 0.2s ease;
+    transition: box-shadow 0.2s ease;
     background: var(--bg);
     border-radius: 0;
     box-shadow:
@@ -181,11 +181,13 @@ p {
     color: var(--text-secondary);
     margin: 0 auto var(--spacing-md);
     display: block;
+    pointer-events: none;
 }
 
 #upload-zone p {
     margin: 0;
     font-family: var(--font-mono);
+    pointer-events: none;
 }
 
 #upload-zone .primary-text {
