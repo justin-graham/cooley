@@ -29,7 +29,7 @@ def call_claude(prompt: str, max_tokens: int = 2048) -> str:
         Response text from Claude
     """
     message = client.messages.create(
-        model="claude-3-5-sonnet-20241022",
+        model="claude-sonnet-4-5-20250929",
         max_tokens=max_tokens,
         messages=[{
             "role": "user",
