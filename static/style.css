@@ -179,8 +179,8 @@ p {
 }
 
 #upload-zone .upload-icon {
-    width: 120px;
-    height: 120px;
+    width: 175px;
+    height: 150px;
     color: var(--text-secondary);
     margin: 0 auto var(--spacing-md);
     display: block;
