@@ -9,11 +9,51 @@ Pass 3: Synthesize cross-document insights (timeline, cap table, issues)
 import os
 import json
 import logging
+import time
 from typing import List, Dict, Any
-from anthropic import Anthropic, APITimeoutError, APIError
+from anthropic import Anthropic, APITimeoutError, APIError, RateLimitError
 from app import db, prompts
 
 logger = logging.getLogger(__name__)
+
+
+def clean_text_for_db(text: str) -> str:
+    """
+    Clean text to remove characters that break PostgreSQL JSONB storage.
+
+    Args:
+        text: Input text string
+
+    Returns:
+        Cleaned text safe for PostgreSQL
+    """
+    if not isinstance(text, str):
+        return text
+    # Remove NULL bytes and other control characters that break PostgreSQL
+    return text.replace('\x00', '').replace('\r', '\n')
+
+
+def clean_document_dict(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Recursively clean all text fields in a document dictionary.
+
+    Args:
+        doc: Document dictionary
+
+    Returns:
+        Cleaned document dictionary
+    """
+    cleaned = {}
+    for key, value in doc.items():
+        if isinstance(value, str):
+            cleaned[key] = clean_text_for_db(value)
+        elif isinstance(value, dict):
+            cleaned[key] = clean_document_dict(value)
+        elif isinstance(value, list):
+            cleaned[key] = [clean_document_dict(item) if isinstance(item, dict) else clean_text_for_db(item) if isinstance(item, str) else item for item in value]
+        else:
+            cleaned[key] = value
+    return cleaned
 
 
 # Initialize Claude client with 60 second timeout
@@ -212,7 +252,14 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
     try:
         extractions_json = json.dumps(extractions, indent=2)
         prompt = prompts.TIMELINE_SYNTHESIS_PROMPT.format(extractions_json=extractions_json)
-        response = call_claude(prompt, max_tokens=4096)
+
+        # Try with rate limit retry
+        try:
+            response = call_claude(prompt, max_tokens=4096)
+        except RateLimitError as rate_err:
+            logger.warning(f"Rate limit hit during timeline synthesis, waiting 60s and retrying...")
+            time.sleep(60)
+            response = call_claude(prompt, max_tokens=4096)
 
         timeline = parse_json_response(response)
 
@@ -221,6 +268,10 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
 
         return timeline
 
+    except RateLimitError as e:
+        logger.error(f"Timeline synthesis failed after retry: Rate limit still exceeded")
+        print(f"ERROR: Timeline synthesis rate limited: {e}")
+        return [{'date': '', 'event_type': 'info', 'description': 'Timeline generation rate limited - please retry later', 'source_docs': []}]
     except Exception as e:
         logger.error(f"Timeline synthesis failed: {e}", exc_info=True)
         print(f"ERROR: Timeline synthesis failed: {e}")
@@ -268,12 +319,26 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
 
         equity_json = json.dumps(equity_data, indent=2)
         prompt = prompts.CAP_TABLE_SYNTHESIS_PROMPT.format(equity_data_json=equity_json)
-        response = call_claude(prompt, max_tokens=4096)
+
+        # Add small delay to spread API load
+        time.sleep(2)
+
+        # Try with rate limit retry
+        try:
+            response = call_claude(prompt, max_tokens=4096)
+        except RateLimitError as rate_err:
+            logger.warning(f"Rate limit hit during cap table synthesis, waiting 60s and retrying...")
+            time.sleep(60)
+            response = call_claude(prompt, max_tokens=4096)
 
         cap_table = parse_json_response(response)
 
         return cap_table
 
+    except RateLimitError as e:
+        logger.error(f"Cap table synthesis failed after retry: Rate limit still exceeded")
+        print(f"ERROR: Cap table synthesis rate limited: {e}")
+        return []
     except Exception as e:
         logger.error(f"Cap table synthesis failed: {e}", exc_info=True)
         print(f"ERROR: Cap table synthesis failed: {e}")
@@ -306,11 +371,25 @@ def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, A
             timeline_json=timeline_json
         )
 
-        response = call_claude(prompt, max_tokens=4096)
+        # Add small delay to spread API load
+        time.sleep(2)
+
+        # Try with rate limit retry
+        try:
+            response = call_claude(prompt, max_tokens=4096)
+        except RateLimitError as rate_err:
+            logger.warning(f"Rate limit hit during issue generation, waiting 60s and retrying...")
+            time.sleep(60)
+            response = call_claude(prompt, max_tokens=4096)
+
         issues = parse_json_response(response)
 
         return issues
 
+    except RateLimitError as e:
+        logger.error(f"Issue generation failed after retry: Rate limit still exceeded")
+        print(f"ERROR: Issue generation rate limited: {e}")
+        return [{'severity': 'warning', 'category': 'Rate Limit', 'description': 'Issue analysis rate limited - partial results returned'}]
     except Exception as e:
         logger.error(f"Issue generation failed: {e}", exc_info=True)
         print(f"ERROR: Issue generation failed: {e}")
@@ -448,13 +527,17 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
         # ========== SAVE RESULTS ==========
         failed_docs = [d for d in classified_docs if d.get('error')]
 
+        # Clean all document text to remove NULL bytes and control characters
+        cleaned_docs = [clean_document_dict(doc) for doc in classified_docs]
+        cleaned_failed_docs = [clean_document_dict(doc) for doc in failed_docs]
+
         db.update_audit_results(audit_id, {
             'company_name': company_name,
-            'documents': classified_docs,
+            'documents': cleaned_docs,
             'timeline': timeline,
             'cap_table': cap_table,
             'issues': issues,
-            'failed_documents': failed_docs
+            'failed_documents': cleaned_failed_docs
         })
 
         logger.info(f"Audit {audit_id} completed successfully")

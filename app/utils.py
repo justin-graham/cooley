@@ -55,6 +55,8 @@ def extract_from_pdf(file_path: str) -> str:
     """
     # pymupdf4llm returns markdown-formatted text, preserving tables and structure
     markdown_text = pymupdf4llm.to_markdown(file_path)
+    # Remove NULL bytes and control characters that break PostgreSQL
+    markdown_text = markdown_text.replace('\x00', '').replace('\r', '\n')
     return markdown_text
 
 
@@ -78,6 +80,8 @@ def extract_from_pdf_fallback(file_path: str) -> str:
     for page_num in range(len(doc)):
         page = doc[page_num]
         text = page.get_text()
+        # Remove NULL bytes and control characters that break PostgreSQL
+        text = text.replace('\x00', '').replace('\r', '\n')
         if text.strip():
             text_parts.append(f"--- Page {page_num + 1} ---\n{text}")
 
