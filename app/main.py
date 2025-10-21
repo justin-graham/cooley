@@ -12,6 +12,7 @@ import uuid
 import shutil
 import tempfile
 import logging
+from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
@@ -201,12 +202,38 @@ async def process_documents_task(audit_id: str, zip_path: str):
         # Parse each document
         documents = []
         for i, file_path in enumerate(file_paths, start=1):
+            filename = os.path.basename(file_path)
+
             try:
                 db.update_progress(audit_id, f"Parsing documents... {i}/{len(file_paths)}")
             except Exception as e:
                 logger.error(f"Failed to update progress: {e}")
 
-            doc = utils.parse_document(file_path)
+            # Parse with timeout to prevent hanging
+            logger.info(f"Parsing document {i}/{len(file_paths)}: {filename}")
+
+            with ThreadPoolExecutor(max_workers=1) as executor:
+                future = executor.submit(utils.parse_document, file_path)
+                try:
+                    doc = future.result(timeout=30)  # 30 second timeout per document
+                    logger.info(f"Successfully parsed: {filename}")
+                except TimeoutError:
+                    logger.error(f"Timeout parsing {filename} after 30 seconds")
+                    doc = {
+                        'filename': filename,
+                        'type': os.path.splitext(filename)[1].lstrip('.'),
+                        'text': '',
+                        'error': 'Document parsing timed out after 30 seconds'
+                    }
+                except Exception as e:
+                    logger.error(f"Error parsing {filename}: {e}")
+                    doc = {
+                        'filename': filename,
+                        'type': os.path.splitext(filename)[1].lstrip('.'),
+                        'text': '',
+                        'error': f'Parsing failed: {str(e)}'
+                    }
+
             documents.append(doc)
 
         if not documents:
