@@ -21,6 +21,7 @@ Accent: #D42B1E (red)
     --accent-light: rgba(212, 43, 30, 0.1);
     --accent-glow: rgba(212, 43, 30, 0.3);
     --accent-blue: #294B71;  /* Blue accent for upload border */
+    --accent-blue-light: rgba(41, 75, 113, 0.05);  /* Light blue background */
 
     /* Typography */
     --font-grotesk: 'Space Grotesk', 'Helvetica Neue', sans-serif;
@@ -152,7 +153,7 @@ p {
     padding: calc(var(--spacing-xl) + 6px);
     text-align: center;
     cursor: pointer;
-    transition: box-shadow 0.2s ease;
+    transition: box-shadow 0.2s ease, background-color 0.2s ease;
     background: var(--bg);
     border-radius: 0;
     box-shadow:
@@ -162,6 +163,7 @@ p {
 }
 
 #upload-zone:hover {
+    background: var(--accent-blue-light);
     box-shadow:
         0 0 0 2px var(--accent-blue),
         0 0 0 6px var(--bg),
@@ -169,6 +171,7 @@ p {
 }
 
 #upload-zone.dragging {
+    background: var(--accent-blue-light);
     box-shadow:
         0 0 0 2px var(--accent-blue),
         0 0 0 6px var(--bg),
