@@ -11,10 +11,13 @@ DOC_CATEGORIES = [
     "Stock Certificate",
     "Assignment Agreement",
     "Share Repurchase Agreement",
+    "83(b) Election",
     "Indemnification Agreement",
     "IP/Proprietary Info Agreement",
     "Corporate Records",
+    "Tax Document",
     "Marketing Materials",
+    "License Agreement",
     "SAFE",
     "Convertible Note",
     "Option Grant Agreement",
@@ -38,27 +41,39 @@ DOCUMENT EXCERPT:
 {text}
 ---
 
-CATEGORIES:
-- Charter Document (Certificate of Incorporation, Articles of Incorporation, Bylaws)
-- Board/Shareholder Minutes (Meeting Minutes, Written Consent, Board Resolutions)
-- Stock Purchase Agreement (Stock issuance agreements, subscription agreements)
-- Stock Certificate (Physical or electronic stock certificates)
-- Assignment Agreement (Assignment of shares, IP assignments)
-- Share Repurchase Agreement (Company buyback agreements, repurchase receipts)
-- Indemnification Agreement (Director/officer indemnification agreements)
-- IP/Proprietary Info Agreement (Employee IP assignment, proprietary information agreements)
-- Corporate Records (EIN documents, tax filings, bank verifications, annual reports)
-- Marketing Materials (Pitch decks, tech sheets, business presentations)
-- SAFE (Simple Agreement for Future Equity)
-- Convertible Note (Convertible debt instruments)
-- Option Grant Agreement (Stock option grants, RSU agreements)
-- Equity Incentive Plan (Stock option plans, equity compensation plans)
-- Financial Statement (Balance sheets, income statements, cap tables)
-- Employment Agreement (Employment contracts, offer letters)
-- Other (anything that doesn't fit above)
+CATEGORIES (with examples):
+- Charter Document: Certificate of Incorporation, Amended Certificate, Articles of Incorporation, Bylaws, Certificate of Secretary
+- Board/Shareholder Minutes: Meeting Minutes, Written Consent, Board Resolutions, Action by Written Consent
+- Stock Purchase Agreement: Restricted Stock Purchase Agreement, Stock Subscription Agreement, Joint Escrow Instructions, Stock Purchase Verification
+- Stock Certificate: Common Stock Certificate, Preferred Stock Certificate
+- Assignment Agreement: Stock Assignment Separate from Certificate, IP Assignment Agreement, Technology Assignment
+- Share Repurchase Agreement: Share Repurchase Agreement, Buyback Receipt, Repurchase Email Confirmation
+- 83(b) Election: IRS Section 83(b) Election forms
+- Indemnification Agreement: Director Indemnification Agreement, Officer Indemnification Agreement
+- IP/Proprietary Info Agreement: Employee Proprietary Information Agreement, Invention Assignment Agreement, Confidentiality Agreement
+- Corporate Records: EIN Assignment, Bank Account Verification, Good Standing Certificate
+- Tax Document: Franchise Tax Report, Tax Payment Receipt, Annual Report Confirmation
+- Marketing Materials: Pitch Deck, Technology Sheet, Product Presentation, Sales Materials
+- License Agreement: Technology License, Patent License, Research License Agreement
+- SAFE: Simple Agreement for Future Equity
+- Convertible Note: Convertible Promissory Note, Convertible Debt Agreement
+- Option Grant Agreement: Stock Option Grant, RSU Agreement, Vesting Schedule
+- Equity Incentive Plan: Stock Option Plan, Equity Compensation Plan, 2023 Equity Incentive Plan
+- Financial Statement: Balance Sheet, Income Statement, Cap Table Spreadsheet, Financial Projections
+- Employment Agreement: Employment Contract, Offer Letter, Consulting Agreement, Advisor Agreement
+- Other: Use ONLY if document truly doesn't fit any category above
+
+CRITICAL CLASSIFICATION RULES:
+1. "Certificate of Incorporation" → Charter Document (NOT Other or Corporate Records)
+2. "Bylaws" or "Certificate of Secretary" → Charter Document
+3. Pitch decks, tech sheets → Marketing Materials (NOT Other)
+4. License agreements from universities/government → License Agreement (NOT Other)
+5. 83(b) tax elections → 83(b) Election (NOT Tax Document or Other)
+6. Advisor agreements → Employment Agreement
+7. Only use "Other" if document absolutely doesn't fit any specific category
 
 INSTRUCTIONS:
-1. Classify the document into ONE category from the list above
+1. Read the document carefully and match to the MOST SPECIFIC category
 2. Provide a one-sentence summary of the document's purpose
 3. Respond ONLY with valid JSON in this exact format:
 
@@ -209,7 +224,7 @@ Respond ONLY with valid JSON (array of cap table entries):
 Sort by ownership percentage descending."""
 
 
-ISSUE_TRACKER_PROMPT = """You are auditing corporate governance records for issues and inconsistencies.
+ISSUE_TRACKER_PROMPT = """You are a corporate attorney auditing governance records for a startup. Identify concrete issues and missing documents.
 
 DOCUMENTS PROVIDED:
 ---
@@ -226,23 +241,49 @@ TIMELINE DATA:
 {timeline_json}
 ---
 
-Identify potential issues such as:
-1. Missing foundational documents (Charter, Bylaws if no Charter found, Board Minutes)
-2. Issued shares exceeding authorized shares
-3. Stock classes in agreements not mentioned in Charter
-4. Board meetings without proper documentation
-5. SAFEs without clear conversion terms
-6. Inconsistent or conflicting information
+CHECK FOR THESE SPECIFIC ISSUES:
 
-For each issue:
+1. FOUNDATIONAL DOCUMENTS (critical if missing):
+   - Certificate of Incorporation or Articles of Incorporation
+   - Bylaws (required for all corporations)
+   - Initial board consent or organizational meeting minutes
+   - Stock ledger or capitalization table spreadsheet
+
+2. EQUITY ISSUANCE COMPLIANCE (critical):
+   - Stock issued after incorporation without board approval/consent
+   - Founders receiving stock without 83(b) elections filed (for vested stock)
+   - Stock options granted without an adopted Equity Incentive Plan
+   - Stock certificates issued without underlying purchase agreements
+
+3. BOARD GOVERNANCE (warning):
+   - No board minutes/consents for major corporate actions (financing, officer appointments, etc.)
+   - Annual shareholder meetings not documented (if required by bylaws)
+   - Director/officer indemnification agreements missing
+
+4. CAP TABLE INTEGRITY (warning):
+   - Issued shares appear to exceed authorized shares (check charter authorized amount)
+   - Repurchase transactions in timeline not reflected in current cap table
+   - Discrepancies between stock certificates and purchase agreements
+
+5. CORPORATE COMPLIANCE (note):
+   - Missing annual reports/franchise tax filings for any year since incorporation
+   - IP assignments missing for founders (if company owns technology)
+   - Employment agreements missing for executives
+
+SEVERITY DEFINITIONS:
+- "critical": Legal compliance issue that could invalidate equity or create liability
+- "warning": Missing best practice document or governance gap that should be fixed
+- "note": Recommended document to have but not strictly required
+
+For EACH issue found:
 - severity: "critical", "warning", or "note"
-- category: Brief category label (e.g., "Missing Document", "Share Count Mismatch")
-- description: Clear description of the issue
+- category: e.g., "Missing Document", "Equity Compliance", "Board Governance"
+- description: Specific issue with relevant document names if applicable
+
+ONLY REPORT REAL ISSUES. If documents appear complete and proper, return empty array.
 
 Respond ONLY with valid JSON (array of issues):
-[{{"severity": "...", "category": "...", "description": "..."}}]
-
-If no issues found, return empty array: []"""
+[{{"severity": "...", "category": "...", "description": "..."}}]"""
 
 
 # ============================================================================

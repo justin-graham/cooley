@@ -282,33 +282,42 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
         equity_data: List of equity issuances
 
     Returns:
-        List of cap table entries with "TBD" for ownership percentages
+        List of cap table entries with calculated ownership percentages
     """
-    # Aggregate by shareholder
+    # Aggregate by shareholder and share class
     aggregated = {}
     for item in equity_data:
-        shareholder = item.get('shareholder') or item.get('investor') or 'Unknown'
+        shareholder = item.get('shareholder') or item.get('investor') or item.get('recipient') or 'Unknown'
         shares = item.get('shares', 0)
         share_class = item.get('share_class') or item.get('type', 'Common Stock')
 
         key = (shareholder, share_class)
         if key not in aggregated:
             aggregated[key] = 0
-        aggregated[key] += shares if isinstance(shares, (int, float)) else 0
 
-    # Convert to cap table format
+        # Add shares (handles positive issuances)
+        if isinstance(shares, (int, float)):
+            aggregated[key] += shares
+
+    # Remove entries with 0 or negative shares
+    aggregated = {k: v for k, v in aggregated.items() if v > 0}
+
+    # Calculate total shares for ownership percentage
+    total_shares = sum(aggregated.values())
+
+    # Convert to cap table format with ownership %
     cap_table = [
         {
             'shareholder': shareholder,
             'shares': shares,
             'share_class': share_class,
-            'ownership_pct': 'TBD (rate limited)'
+            'ownership_pct': round((shares / total_shares * 100), 2) if total_shares > 0 else 0.0
         }
         for (shareholder, share_class), shares in aggregated.items()
     ]
 
-    # Sort by shares descending
-    cap_table.sort(key=lambda x: x['shares'] if isinstance(x['shares'], (int, float)) else 0, reverse=True)
+    # Sort by ownership percentage descending
+    cap_table.sort(key=lambda x: x['ownership_pct'], reverse=True)
 
     return cap_table
 

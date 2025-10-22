@@ -4,6 +4,7 @@ Gracefully handles errors - returns error message instead of crashing.
 """
 
 import os
+import logging
 import zipfile
 import tempfile
 from typing import List, Dict, Any
@@ -12,6 +13,8 @@ import pymupdf as fitz
 from docx import Document
 import pandas as pd
 from pptx import Presentation
+
+logger = logging.getLogger(__name__)
 
 try:
     from PIL import Image
@@ -239,7 +242,12 @@ def parse_document(file_path: str) -> Dict[str, Any]:
     try:
         # Route to appropriate parser based on extension
         if file_ext == '.pdf':
-            result['text'] = extract_from_pdf(file_path)
+            try:
+                result['text'] = extract_from_pdf(file_path)
+            except NameError as e:
+                # Library bug in pymupdf4llm - use fallback extraction
+                logger.warning(f"pymupdf4llm bug for {filename}, using fallback: {e}")
+                result['text'] = extract_from_pdf_fallback(file_path)
         elif file_ext == '.docx':
             result['text'] = extract_from_docx(file_path)
         elif file_ext == '.xlsx':
@@ -265,9 +273,6 @@ def parse_document(file_path: str) -> Dict[str, Any]:
         if not result['text'] or len(result['text'].strip()) < 10:
             result['error'] = "Document appears to be empty or unreadable"
 
-    except NameError as e:
-        # Catch library bugs like "name 'item' is not defined"
-        result['error'] = f"Failed to parse: Library parsing bug - {str(e)}"
     except Exception as e:
         result['error'] = f"Failed to parse: {str(e)}"
 
