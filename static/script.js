@@ -101,7 +101,7 @@ async function handleFileUpload(file) {
 
     // Show progress section
     uploadSection.style.display = 'none';
-    progressSection.style.display = 'block';
+    progressSection.style.display = 'flex';
     progressStep.textContent = 'Uploading';
     progressText.textContent = 'Uploading zip file...';
 

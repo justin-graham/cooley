@@ -209,6 +209,20 @@ def extract_option_grant_data(doc: Dict[str, Any]) -> Dict[str, Any]:
         return {'error': str(e)}
 
 
+def extract_repurchase_data(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Extract data from Share Repurchase Agreements."""
+    try:
+        prompt = prompts.SHARE_REPURCHASE_EXTRACTION_PROMPT.format(text=doc['text'][:15000])
+        response = call_claude(prompt, max_tokens=1024)
+        repurchase = parse_json_response(response)
+        # Make shares negative to subtract from cap table
+        if 'shares' in repurchase and isinstance(repurchase['shares'], (int, float)):
+            repurchase['shares'] = -abs(repurchase['shares'])
+        return repurchase
+    except Exception as e:
+        return {'error': str(e)}
+
+
 def extract_by_type(doc: Dict[str, Any]) -> Dict[str, Any]:
     """
     Route document to appropriate extraction function based on category.
@@ -231,6 +245,8 @@ def extract_by_type(doc: Dict[str, Any]) -> Dict[str, Any]:
         return {'minutes_data': extract_board_minutes_data(doc)}
     elif 'Option Grant' in category:
         return {'option_data': extract_option_grant_data(doc)}
+    elif 'Repurchase' in category:
+        return {'repurchase_data': extract_repurchase_data(doc)}
     else:
         return {}
 
@@ -356,6 +372,16 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
                         'shares': option.get('shares'),
                         'type': 'Option',
                         'date': option.get('grant_date')
+                    })
+            if 'repurchase_data' in doc:
+                repurchase = doc['repurchase_data']
+                if not repurchase.get('error'):
+                    # Add repurchase with negative shares to reduce cap table
+                    equity_data.append({
+                        'shareholder': repurchase.get('shareholder'),
+                        'shares': repurchase.get('shares'),  # Already negative from extraction
+                        'share_class': repurchase.get('share_class', 'Common Stock'),
+                        'date': repurchase.get('date')
                     })
 
         if not equity_data:

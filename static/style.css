@@ -210,12 +210,16 @@ p {
    ============================================================================ */
 
 #progress {
-    display: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
     margin: var(--spacing-lg) 0;
     padding: var(--spacing-xl);
     border: 2px solid var(--accent);
     background: var(--accent-light);
     text-align: center;
+    min-height: 200px;
 }
 
 #progress-wrapper {

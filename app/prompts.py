@@ -34,52 +34,92 @@ DOC_CATEGORIES = [
 
 CLASSIFICATION_PROMPT = """You are an expert paralegal AI specializing in corporate governance for startups.
 
-Your task is to analyze the following document excerpt and classify it into ONE category.
+Analyze the document excerpt below and classify it into the MOST SPECIFIC category.
 
 DOCUMENT EXCERPT:
 ---
 {text}
 ---
 
-CATEGORIES (with examples):
-- Charter Document: Certificate of Incorporation, Amended Certificate, Articles of Incorporation, Bylaws, Certificate of Secretary
-- Board/Shareholder Minutes: Meeting Minutes, Written Consent, Board Resolutions, Action by Written Consent
-- Stock Purchase Agreement: Restricted Stock Purchase Agreement, Stock Subscription Agreement, Joint Escrow Instructions, Stock Purchase Verification
-- Stock Certificate: Common Stock Certificate, Preferred Stock Certificate
-- Assignment Agreement: Stock Assignment Separate from Certificate, IP Assignment Agreement, Technology Assignment
-- Share Repurchase Agreement: Share Repurchase Agreement, Buyback Receipt, Repurchase Email Confirmation
-- 83(b) Election: IRS Section 83(b) Election forms
-- Indemnification Agreement: Director Indemnification Agreement, Officer Indemnification Agreement
-- IP/Proprietary Info Agreement: Employee Proprietary Information Agreement, Invention Assignment Agreement, Confidentiality Agreement
-- Corporate Records: EIN Assignment, Bank Account Verification, Good Standing Certificate
-- Tax Document: Franchise Tax Report, Tax Payment Receipt, Annual Report Confirmation
-- Marketing Materials: Pitch Deck, Technology Sheet, Product Presentation, Sales Materials
-- License Agreement: Technology License, Patent License, Research License Agreement
-- SAFE: Simple Agreement for Future Equity
-- Convertible Note: Convertible Promissory Note, Convertible Debt Agreement
-- Option Grant Agreement: Stock Option Grant, RSU Agreement, Vesting Schedule
-- Equity Incentive Plan: Stock Option Plan, Equity Compensation Plan, 2023 Equity Incentive Plan
-- Financial Statement: Balance Sheet, Income Statement, Cap Table Spreadsheet, Financial Projections
-- Employment Agreement: Employment Contract, Offer Letter, Consulting Agreement, Advisor Agreement
-- Other: Use ONLY if document truly doesn't fit any category above
+CLASSIFICATION STRATEGY:
+1. Look at the FIRST 200 characters - this usually contains the document title/header
+2. Match document title to the most specific category below
+3. If title is ambiguous, read the content to understand the document's purpose
+4. Choose the MOST SPECIFIC category that fits (not "Other")
 
-CRITICAL CLASSIFICATION RULES:
-1. "Certificate of Incorporation" → Charter Document (NOT Other or Corporate Records)
-2. "Bylaws" or "Certificate of Secretary" → Charter Document
-3. Pitch decks, tech sheets → Marketing Materials (NOT Other)
-4. License agreements from universities/government → License Agreement (NOT Other)
-5. 83(b) tax elections → 83(b) Election (NOT Tax Document or Other)
-6. Advisor agreements → Employment Agreement
-7. Only use "Other" if document absolutely doesn't fit any specific category
+CATEGORIES (with explicit text patterns to look for):
 
-INSTRUCTIONS:
-1. Read the document carefully and match to the MOST SPECIFIC category
-2. Provide a one-sentence summary of the document's purpose
-3. Respond ONLY with valid JSON in this exact format:
+- Charter Document:
+  * Starts with "CERTIFICATE OF INCORPORATION OF" or "ARTICLES OF INCORPORATION"
+  * Contains "BYLAWS OF" near the top
+  * "CERTIFICATE OF SECRETARY" certifying bylaws
 
-{{"doc_type": "Category Name", "summary": "One sentence summary"}}
+- Board/Shareholder Minutes:
+  * Titles like "ACTION BY WRITTEN CONSENT", "BOARD MEETING MINUTES", "SHAREHOLDER CONSENT"
+  * NOT pitch decks or presentations (those are Marketing Materials)
 
-Do not include any markdown formatting, code blocks, or explanatory text. Only return the JSON object."""
+- Stock Purchase Agreement:
+  * "RESTRICTED STOCK PURCHASE AGREEMENT"
+  * "STOCK SUBSCRIPTION AGREEMENT"
+  * "JOINT ESCROW INSTRUCTIONS" (part of stock purchase)
+  * "STOCK PURCHASE VERIFICATION" (receipt/confirmation)
+
+- Stock Certificate:
+  * Header says "COMMON STOCK CERTIFICATE" or "PREFERRED STOCK CERTIFICATE"
+  * Formal certificate with share numbers
+
+- Assignment Agreement:
+  * "ASSIGNMENT AGREEMENT" or "ASSIGNMENT SEPARATE FROM CERTIFICATE"
+  * Transferring shares or IP
+
+- Share Repurchase Agreement:
+  * Contains "REPURCHASE" in title or content
+  * Company buying back shares from shareholder
+
+- 83(b) Election:
+  * IRS form with "SECTION 83(b)" election language
+
+- Indemnification Agreement:
+  * "INDEMNIFICATION AGREEMENT" for directors/officers
+
+- IP/Proprietary Info Agreement:
+  * "EMPLOYEE PROPRIETARY INFORMATION" agreement
+  * "INVENTION ASSIGNMENT AGREEMENT"
+  * Protecting company IP from employees
+
+- Corporate Records:
+  * EIN assignment letters
+  * Bank account verification letters
+  * Good standing certificates
+
+- Tax Document:
+  * "FRANCHISE TAX REPORT", "TAX PAYMENT RECEIPT"
+  * "ANNUAL REPORT" (state filings)
+
+- Marketing Materials:
+  * Pitch deck with "Slide 1", "Slide 2" or investor presentation content
+  * Technology sheets, product brochures
+  * NOT board minutes or consents
+
+- License Agreement:
+  * University or government technology licenses
+  * Patent licenses (e.g., NASA license)
+
+- Employment Agreement:
+  * Employment contracts, offer letters
+  * "ADVISOR AGREEMENT" or "CONSULTING AGREEMENT"
+
+- Other:
+  * ONLY use if document doesn't match ANY category above
+  * Should be rare (<10% of documents)
+
+CRITICAL: Look at the document title first. For example:
+- "Certificate of Incorporation of Acme Inc." → Charter Document
+- "Rehydrate Pitch Deck" → Marketing Materials
+- "Employee Proprietary Information Agreement" → IP/Proprietary Info Agreement
+
+Respond ONLY with valid JSON:
+{{"doc_type": "Category Name", "summary": "One sentence summary"}}"""
 
 
 # ============================================================================
@@ -175,6 +215,24 @@ Extract:
 
 Respond ONLY with valid JSON:
 {{"recipient": "...", "shares": 0, "strike_price": null, "vesting_schedule": "...", "grant_date": "..."}}"""
+
+
+SHARE_REPURCHASE_EXTRACTION_PROMPT = """You are analyzing a Share Repurchase Agreement or repurchase documentation.
+
+DOCUMENT TEXT:
+---
+{text}
+---
+
+Extract:
+- shareholder: Name of the person/entity whose shares were repurchased by the company
+- shares: Number of shares repurchased (integer - use POSITIVE number, we'll subtract it later)
+- share_class: Type of stock repurchased (e.g., "Common Stock")
+- price_per_share: Price per share paid (float, or null if not mentioned)
+- date: Date of repurchase transaction (YYYY-MM-DD format)
+
+Respond ONLY with valid JSON:
+{{"shareholder": "...", "shares": 0, "share_class": "...", "price_per_share": 0.0, "date": "..."}}"""
 
 
 # ============================================================================
