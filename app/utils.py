@@ -13,6 +13,12 @@ from docx import Document
 import pandas as pd
 from pptx import Presentation
 
+try:
+    from PIL import Image
+    PIL_AVAILABLE = True
+except ImportError:
+    PIL_AVAILABLE = False
+
 
 def unzip_file(zip_path: str) -> List[str]:
     """
@@ -178,6 +184,34 @@ def extract_from_pptx(file_path: str) -> str:
     return '\n\n'.join(all_text)
 
 
+def extract_from_image(file_path: str) -> str:
+    """
+    Extract basic information from image files (PNG, JPG, etc.).
+
+    Args:
+        file_path: Path to image file
+
+    Returns:
+        Basic image metadata as text
+
+    Raises:
+        Exception if extraction fails
+    """
+    if not PIL_AVAILABLE:
+        return "Image file (PIL not available for text extraction)"
+
+    img = Image.open(file_path)
+    metadata = f"Image: {img.format} format, {img.size[0]}x{img.size[1]} pixels"
+
+    # Try to extract any embedded text from metadata
+    if hasattr(img, 'info') and img.info:
+        for key, value in img.info.items():
+            if isinstance(value, str) and len(value) < 200:
+                metadata += f"\n{key}: {value}"
+
+    return metadata
+
+
 def parse_document(file_path: str) -> Dict[str, Any]:
     """
     Parse a document file and extract text content.
@@ -212,6 +246,16 @@ def parse_document(file_path: str) -> Dict[str, Any]:
             result['text'] = extract_from_xlsx(file_path)
         elif file_ext == '.pptx':
             result['text'] = extract_from_pptx(file_path)
+        elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']:
+            result['text'] = extract_from_image(file_path)
+        elif not file_ext or file_ext == '.':
+            # Files without extension - try to read as text
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    result['text'] = f.read(1000)  # First 1000 chars
+            except:
+                result['error'] = f"Unsupported file type: no extension"
+                return result
         else:
             # Unsupported file type
             result['error'] = f"Unsupported file type: {file_ext}"
@@ -221,6 +265,9 @@ def parse_document(file_path: str) -> Dict[str, Any]:
         if not result['text'] or len(result['text'].strip()) < 10:
             result['error'] = "Document appears to be empty or unreadable"
 
+    except NameError as e:
+        # Catch library bugs like "name 'item' is not defined"
+        result['error'] = f"Failed to parse: Library parsing bug - {str(e)}"
     except Exception as e:
         result['error'] = f"Failed to parse: {str(e)}"
 

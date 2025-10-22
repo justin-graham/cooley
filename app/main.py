@@ -257,6 +257,9 @@ async def process_documents_task(audit_id: str, zip_path: str):
                     'error': f'Parsing failed: {str(e)}'
                 }
             finally:
+                # Force garbage collection to clean up PyMuPDF references
+                import gc
+                gc.collect()
                 # Don't wait for stuck threads to finish
                 executor.shutdown(wait=False, cancel_futures=True)
 

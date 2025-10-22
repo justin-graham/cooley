@@ -278,6 +278,46 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
         return [{'date': '', 'event_type': 'error', 'description': f'Timeline generation failed: {str(e)}', 'source_docs': []}]
 
 
+def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Build a basic cap table from raw equity data without AI synthesis.
+    Used as fallback when Claude API is rate limited.
+
+    Args:
+        equity_data: List of equity issuances
+
+    Returns:
+        List of cap table entries with "TBD" for ownership percentages
+    """
+    # Aggregate by shareholder
+    aggregated = {}
+    for item in equity_data:
+        shareholder = item.get('shareholder') or item.get('investor') or 'Unknown'
+        shares = item.get('shares', 0)
+        share_class = item.get('share_class') or item.get('type', 'Common Stock')
+
+        key = (shareholder, share_class)
+        if key not in aggregated:
+            aggregated[key] = 0
+        aggregated[key] += shares if isinstance(shares, (int, float)) else 0
+
+    # Convert to cap table format
+    cap_table = [
+        {
+            'shareholder': shareholder,
+            'shares': shares,
+            'share_class': share_class,
+            'ownership_pct': 'TBD (rate limited)'
+        }
+        for (shareholder, share_class), shares in aggregated.items()
+    ]
+
+    # Sort by shares descending
+    cap_table.sort(key=lambda x: x['shares'] if isinstance(x['shares'], (int, float)) else 0, reverse=True)
+
+    return cap_table
+
+
 def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Generate a cap table from equity issuance data.
@@ -317,11 +357,14 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
         if not equity_data:
             return []
 
+        # Build raw cap table as fallback
+        raw_cap_table = build_raw_cap_table(equity_data)
+
         equity_json = json.dumps(equity_data, indent=2)
         prompt = prompts.CAP_TABLE_SYNTHESIS_PROMPT.format(equity_data_json=equity_json)
 
         # Add small delay to spread API load
-        time.sleep(2)
+        time.sleep(5)  # Increased from 2s to 5s
 
         # Try with rate limit retry
         try:
@@ -337,8 +380,8 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
 
     except RateLimitError as e:
         logger.error(f"Cap table synthesis failed after retry: Rate limit still exceeded")
-        print(f"ERROR: Cap table synthesis rate limited: {e}")
-        return []
+        print(f"ERROR: Cap table synthesis rate limited, returning raw equity data: {e}")
+        return raw_cap_table  # Return raw data instead of empty array
     except Exception as e:
         logger.error(f"Cap table synthesis failed: {e}", exc_info=True)
         print(f"ERROR: Cap table synthesis failed: {e}")
@@ -372,7 +415,7 @@ def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, A
         )
 
         # Add small delay to spread API load
-        time.sleep(2)
+        time.sleep(5)  # Increased from 2s to 5s
 
         # Try with rate limit retry
         try:

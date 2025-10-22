@@ -11,9 +11,39 @@ let pollInterval = null;
 const uploadZone = document.getElementById('upload-zone');
 const fileInput = document.getElementById('file-input');
 const progressSection = document.getElementById('progress');
+const progressStep = document.getElementById('progress-step');
 const progressText = document.getElementById('progress-text');
 const resultsSection = document.getElementById('results');
 const uploadSection = document.getElementById('upload-section');
+
+// ============================================================================
+// PROGRESS STEP MAPPING
+// ============================================================================
+
+/**
+ * Map backend progress messages to user-friendly step labels
+ */
+function getProgressStep(message) {
+    if (!message) return 'Processing';
+
+    const msg = message.toLowerCase();
+
+    if (msg.includes('upload') || msg.includes('starting')) {
+        return 'Uploading';
+    } else if (msg.includes('parsing') || msg.includes('extract')) {
+        return 'Extracting';
+    } else if (msg.includes('pass 1') || msg.includes('classifying')) {
+        return 'Classifying';
+    } else if (msg.includes('pass 2') || msg.includes('extracting data')) {
+        return 'Analyzing';
+    } else if (msg.includes('pass 3') || msg.includes('synthesizing')) {
+        return 'Synthesizing';
+    } else if (msg.includes('complete')) {
+        return 'Complete';
+    }
+
+    return 'Processing';
+}
 
 // ============================================================================
 // UPLOAD HANDLING
@@ -72,7 +102,8 @@ async function handleFileUpload(file) {
     // Show progress section
     uploadSection.style.display = 'none';
     progressSection.style.display = 'block';
-    progressText.textContent = 'Processing documents...';
+    progressStep.textContent = 'Uploading';
+    progressText.textContent = 'Uploading zip file...';
 
     try {
         // Upload file
@@ -132,8 +163,9 @@ async function checkStatus() {
 
         const data = await response.json();
 
-        // Update progress text
+        // Update progress text and step
         if (data.progress) {
+            progressStep.textContent = getProgressStep(data.progress);
             progressText.textContent = data.progress;
         }
 

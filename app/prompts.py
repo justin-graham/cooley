@@ -8,6 +8,13 @@ DOC_CATEGORIES = [
     "Charter Document",
     "Board/Shareholder Minutes",
     "Stock Purchase Agreement",
+    "Stock Certificate",
+    "Assignment Agreement",
+    "Share Repurchase Agreement",
+    "Indemnification Agreement",
+    "IP/Proprietary Info Agreement",
+    "Corporate Records",
+    "Marketing Materials",
     "SAFE",
     "Convertible Note",
     "Option Grant Agreement",
@@ -35,6 +42,13 @@ CATEGORIES:
 - Charter Document (Certificate of Incorporation, Articles of Incorporation, Bylaws)
 - Board/Shareholder Minutes (Meeting Minutes, Written Consent, Board Resolutions)
 - Stock Purchase Agreement (Stock issuance agreements, subscription agreements)
+- Stock Certificate (Physical or electronic stock certificates)
+- Assignment Agreement (Assignment of shares, IP assignments)
+- Share Repurchase Agreement (Company buyback agreements, repurchase receipts)
+- Indemnification Agreement (Director/officer indemnification agreements)
+- IP/Proprietary Info Agreement (Employee IP assignment, proprietary information agreements)
+- Corporate Records (EIN documents, tax filings, bank verifications, annual reports)
+- Marketing Materials (Pitch decks, tech sheets, business presentations)
 - SAFE (Simple Agreement for Future Equity)
 - Convertible Note (Convertible debt instruments)
 - Option Grant Agreement (Stock option grants, RSU agreements)
