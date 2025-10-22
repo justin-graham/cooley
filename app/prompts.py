@@ -74,11 +74,26 @@ Extract the following information:
 - incorporation_date: Date of incorporation (YYYY-MM-DD format)
 - authorized_shares: Total authorized shares (common + all preferred classes)
 - share_classes: List of all authorized share classes (e.g., ["Common Stock", "Series A Preferred"])
+- source_quote: Exact text from document showing the authorized shares (for verification)
 
 If any field cannot be found, use null.
 
-Respond ONLY with valid JSON:
-{{"company_name": "...", "incorporation_date": "...", "authorized_shares": 0, "share_classes": []}}"""
+EXAMPLE INPUT:
+"CERTIFICATE OF INCORPORATION OF ACME, INC. Filed on January 15, 2020. ARTICLE IV: The total number of shares which the Corporation is authorized to issue is 10,000,000 shares of Common Stock."
+
+EXAMPLE OUTPUT:
+{{"company_name": "Acme, Inc.", "incorporation_date": "2020-01-15", "authorized_shares": 10000000, "share_classes": ["Common Stock"], "source_quote": "The total number of shares which the Corporation is authorized to issue is 10,000,000 shares of Common Stock."}}
+
+RESPONSE FORMAT (JSON Schema):
+{{
+  "company_name": string or null,
+  "incorporation_date": string (YYYY-MM-DD) or null,
+  "authorized_shares": integer or null,
+  "share_classes": array of strings,
+  "source_quote": string or null
+}}
+
+Respond ONLY with valid JSON matching this schema."""
 
 
 STOCK_EXTRACTION_PROMPT = """You are analyzing a Stock Purchase Agreement or stock issuance document.
@@ -94,11 +109,29 @@ Extract ALL equity issuances mentioned in this document. For each issuance:
 - share_class: Type of stock (e.g., "Common Stock", "Series A Preferred")
 - price_per_share: Price per share (float, or null if not mentioned)
 - date: Effective date of issuance (YYYY-MM-DD format)
+- source_quote: Exact text from document showing this issuance (for verification)
 
-Respond ONLY with valid JSON (array of issuances):
-[{{"shareholder": "...", "shares": 0, "share_class": "...", "price_per_share": 0.0, "date": "..."}}]
+EXAMPLE INPUT:
+"STOCK PURCHASE AGREEMENT dated March 1, 2021 between Acme, Inc. and John Smith. Purchaser agrees to purchase 1,000,000 shares of Common Stock at $0.001 per share."
 
-If no issuances found, return an empty array: []"""
+EXAMPLE OUTPUT:
+[{{"shareholder": "John Smith", "shares": 1000000, "share_class": "Common Stock", "price_per_share": 0.001, "date": "2021-03-01", "source_quote": "Purchaser agrees to purchase 1,000,000 shares of Common Stock at $0.001 per share."}}]
+
+RESPONSE FORMAT (JSON Schema):
+[
+  {{
+    "shareholder": string,
+    "shares": integer,
+    "share_class": string,
+    "price_per_share": float or null,
+    "date": string (YYYY-MM-DD),
+    "source_quote": string
+  }}
+]
+
+If no issuances found, return an empty array: []
+
+Respond ONLY with valid JSON array matching this schema:"""
 
 
 SAFE_EXTRACTION_PROMPT = """You are analyzing a SAFE (Simple Agreement for Future Equity) document.
@@ -114,9 +147,25 @@ Extract the following:
 - valuation_cap: Valuation cap in dollars (integer, or null)
 - discount_rate: Discount rate as a percentage (float, or null)
 - date: Effective date of the SAFE (YYYY-MM-DD format)
+- source_quote: Exact text from document showing the investment amount and terms (for verification)
 
-Respond ONLY with valid JSON:
-{{"investor": "...", "amount": 0, "valuation_cap": null, "discount_rate": null, "date": "..."}}"""
+EXAMPLE INPUT:
+"SAFE dated June 15, 2022 between Acme, Inc. and XYZ Ventures. Investor agrees to invest $500,000 with a valuation cap of $5,000,000 and 20% discount."
+
+EXAMPLE OUTPUT:
+{{"investor": "XYZ Ventures", "amount": 500000, "valuation_cap": 5000000, "discount_rate": 20.0, "date": "2022-06-15", "source_quote": "Investor agrees to invest $500,000 with a valuation cap of $5,000,000 and 20% discount."}}
+
+RESPONSE FORMAT (JSON Schema):
+{{
+  "investor": string,
+  "amount": integer,
+  "valuation_cap": integer or null,
+  "discount_rate": float or null,
+  "date": string (YYYY-MM-DD),
+  "source_quote": string
+}}
+
+Respond ONLY with valid JSON matching this schema:"""
 
 
 BOARD_MINUTES_EXTRACTION_PROMPT = """You are analyzing Board or Shareholder Minutes/Consents.
@@ -148,9 +197,10 @@ Extract:
 - strike_price: Exercise/strike price per share (float, or null for RSUs)
 - vesting_schedule: Brief description of vesting (e.g., "4 years, 1 year cliff")
 - grant_date: Date of the grant (YYYY-MM-DD format)
+- source_quote: Exact text from document showing the grant details (for verification)
 
 Respond ONLY with valid JSON:
-{{"recipient": "...", "shares": 0, "strike_price": null, "vesting_schedule": "...", "grant_date": "..."}}"""
+{{"recipient": "...", "shares": 0, "strike_price": null, "vesting_schedule": "...", "grant_date": "...", "source_quote": "..."}}"""
 
 
 SHARE_REPURCHASE_EXTRACTION_PROMPT = """You are analyzing a Share Repurchase Agreement or repurchase documentation.
@@ -166,9 +216,25 @@ Extract:
 - share_class: Type of stock repurchased (e.g., "Common Stock")
 - price_per_share: Price per share paid (float, or null if not mentioned)
 - date: Date of repurchase transaction (YYYY-MM-DD format)
+- source_quote: Exact text from document showing the repurchase details (for verification)
 
-Respond ONLY with valid JSON:
-{{"shareholder": "...", "shares": 0, "share_class": "...", "price_per_share": 0.0, "date": "..."}}"""
+EXAMPLE INPUT:
+"STOCK REPURCHASE AGREEMENT dated September 10, 2023. Acme, Inc. agrees to repurchase 500,000 shares of Common Stock from Jane Doe at $1.50 per share."
+
+EXAMPLE OUTPUT:
+{{"shareholder": "Jane Doe", "shares": 500000, "share_class": "Common Stock", "price_per_share": 1.50, "date": "2023-09-10", "source_quote": "Acme, Inc. agrees to repurchase 500,000 shares of Common Stock from Jane Doe at $1.50 per share."}}
+
+RESPONSE FORMAT (JSON Schema):
+{{
+  "shareholder": string,
+  "shares": integer (positive),
+  "share_class": string,
+  "price_per_share": float or null,
+  "date": string (YYYY-MM-DD),
+  "source_quote": string
+}}
+
+Respond ONLY with valid JSON matching this schema:"""
 
 
 # ============================================================================

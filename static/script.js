@@ -28,11 +28,8 @@ function getProgressStep(message) {
 
     const msg = message.toLowerCase();
 
-    if (msg.includes('upload') || msg.includes('starting')) {
-        return 'Uploading';
-    } else if (msg.includes('parsing') || msg.includes('extraction')) {
-        return 'Extracting';
-    } else if (msg.includes('pass 1') || msg.includes('classifying')) {
+    // Check specific phase markers FIRST (before generic keywords)
+    if (msg.includes('pass 1') || msg.includes('classifying document')) {
         return 'Classifying';
     } else if (msg.includes('pass 2') || msg.includes('extracting data')) {
         return 'Analyzing';
@@ -40,6 +37,10 @@ function getProgressStep(message) {
         return 'Synthesizing';
     } else if (msg.includes('complete')) {
         return 'Complete';
+    } else if (msg.includes('parsing document') || msg.includes('found') && msg.includes('files')) {
+        return 'Extracting';
+    } else if (msg.includes('extracting files') || msg.includes('starting')) {
+        return 'Uploading';
     }
 
     return 'Processing';
@@ -204,8 +205,8 @@ function renderResults(results) {
     // Show results section
     resultsSection.style.display = 'block';
 
-    // Render company name
-    document.getElementById('company-name').textContent = results.company_name || 'Unknown Company';
+    // Render terminal-style company header
+    renderCompanyHeader(results);
 
     // Render documents
     renderDocuments(results.documents);
@@ -229,10 +230,50 @@ function renderResults(results) {
 }
 
 /**
- * Render document inventory grouped by category
+ * Render terminal-style company header with stats
+ */
+function renderCompanyHeader(results) {
+    const container = document.querySelector('.company-header');
+
+    // Calculate stats
+    const docCount = results.documents ? results.documents.length : 0;
+    const timeline = results.timeline || [];
+    const dates = timeline.map(e => e.date).filter(d => d).sort();
+    const yearSpan = dates.length > 1 ? `${dates[0]} to ${dates[dates.length - 1]}` : dates[0] || 'N/A';
+
+    const html = `
+        <div class="terminal-line">
+            <span class="terminal-prompt">$</span> audit-report --company="${results.company_name || 'Unknown Company'}"
+        </div>
+        <div class="terminal-line">
+            <span class="terminal-prompt">&gt;</span> Analysis complete
+        </div>
+        <div class="terminal-stats">
+            <span class="terminal-stat">${docCount} documents</span>
+            <span class="terminal-stat">${timeline.length} events</span>
+            <span class="terminal-stat">${yearSpan}</span>
+        </div>
+    `;
+
+    container.innerHTML = html;
+}
+
+/**
+ * Render document inventory grouped by category with card grid
  */
 function renderDocuments(documents) {
     const container = document.getElementById('documents-content');
+
+    // Category colors (using provided palette)
+    const categoryColors = {
+        'Charter Document': '#294B71',
+        'Stock Purchase Agreement': '#000000',
+        'Board/Shareholder Minutes': '#CDDEE9',
+        'SAFE': '#294B71',
+        'Option Grant Agreement': '#000000',
+        'Share Repurchase Agreement': '#D42B1E',
+        '83(b) Election': '#294B71'
+    };
 
     // Group documents by category
     const grouped = documents.reduce((acc, doc) => {
@@ -242,29 +283,31 @@ function renderDocuments(documents) {
         return acc;
     }, {});
 
-    // Render each category
-    let html = '';
+    // Render card grid
+    let html = '<div class="documents-grid">';
     for (const [category, docs] of Object.entries(grouped)) {
+        const color = categoryColors[category] || '#666666';
         html += `
-            <div class="document-category">
-                <h3>${category} (${docs.length})</h3>
+            <div class="document-category" style="--category-color: ${color}">
+                <h3>${category} <span class="doc-count">(${docs.length})</span></h3>
                 <ul class="document-list">
                     ${docs.map(doc => `
                         <li>
                             ${doc.filename}
-                            ${doc.error ? '<span class="error-badge">(Failed to parse)</span>' : ''}
+                            ${doc.error ? '<span class="error-badge">(Failed)</span>' : ''}
                         </li>
                     `).join('')}
                 </ul>
             </div>
         `;
     }
+    html += '</div>';
 
     container.innerHTML = html;
 }
 
 /**
- * Render timeline of corporate events
+ * Render timeline of corporate events with vertical line and dots
  */
 function renderTimeline(timeline) {
     const container = document.getElementById('timeline-content');
@@ -276,7 +319,8 @@ function renderTimeline(timeline) {
 
     const html = timeline.map(event => `
         <div class="timeline-event">
-            <div class="timeline-date">${event.date || 'Unknown Date'}</div>
+            <div class="timeline-date">${event.date || 'Unknown'}</div>
+            <div class="timeline-dot"></div>
             <div class="timeline-description">${event.description || 'No description'}</div>
         </div>
     `).join('');
@@ -285,7 +329,7 @@ function renderTimeline(timeline) {
 }
 
 /**
- * Render cap table
+ * Render cap table with progress bars and verification indicators
  */
 function renderCapTable(capTable) {
     const container = document.getElementById('cap-table-content');
@@ -295,6 +339,10 @@ function renderCapTable(capTable) {
         return;
     }
 
+    // Calculate totals
+    const totalShares = capTable.reduce((sum, entry) => sum + (entry.shares || 0), 0);
+    const totalOwnership = capTable.reduce((sum, entry) => sum + (entry.ownership_pct || 0), 0);
+
     const html = `
         <table>
             <thead>
@@ -302,23 +350,55 @@ function renderCapTable(capTable) {
                     <th>Shareholder</th>
                     <th>Class</th>
                     <th>Shares</th>
-                    <th>Ownership %</th>
+                    <th>Ownership</th>
                 </tr>
             </thead>
             <tbody>
-                ${capTable.map(entry => `
-                    <tr>
-                        <td>${entry.shareholder || 'Unknown'}</td>
-                        <td>${entry.share_class || 'N/A'}</td>
-                        <td>${formatNumber(entry.shares)}</td>
-                        <td>${formatPercent(entry.ownership_pct)}</td>
-                    </tr>
-                `).join('')}
+                ${capTable.map(entry => {
+                    // Get verification badge if available
+                    const verificationBadge = getVerificationBadge(entry.verification);
+
+                    return `
+                        <tr>
+                            <td>${entry.shareholder || 'Unknown'}${verificationBadge}</td>
+                            <td>${entry.share_class || 'N/A'}</td>
+                            <td>${formatNumber(entry.shares)}</td>
+                            <td>
+                                <div class="ownership-cell">
+                                    <div class="ownership-bar">
+                                        <div class="ownership-fill" style="width: ${entry.ownership_pct || 0}%"></div>
+                                    </div>
+                                    <span class="ownership-text">${formatPercent(entry.ownership_pct)}</span>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('')}
+                <tr class="total-row">
+                    <td colspan="2">TOTAL</td>
+                    <td>${formatNumber(totalShares)}</td>
+                    <td><span class="ownership-text">${formatPercent(totalOwnership)}</span></td>
+                </tr>
             </tbody>
         </table>
     `;
 
     container.innerHTML = html;
+}
+
+/**
+ * Get verification badge HTML based on confidence score
+ */
+function getVerificationBadge(verification) {
+    if (!verification || !verification.confidence_score) {
+        return '';
+    }
+
+    const score = verification.confidence_score;
+    const badgeClass = score >= 70 ? 'verification-high' : 'verification-low';
+    const symbol = score >= 70 ? '✓' : '⚠';
+
+    return `<span class="verification-badge ${badgeClass}" title="Verification confidence: ${score}%">${symbol} ${score}%</span>`;
 }
 
 /**

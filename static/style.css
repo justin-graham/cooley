@@ -282,25 +282,43 @@ p {
 }
 
 .company-header {
-    text-align: center;
-    padding: var(--spacing-xl) 0;
-    border-bottom: 2px solid var(--accent);
+    padding: var(--spacing-lg);
+    border: 2px solid #000000;
+    background: #000000;
+    color: #00FF00;
+    font-family: var(--font-mono);
     margin-bottom: var(--spacing-xl);
 }
 
-.company-name {
-    font-size: 2rem;
-    color: var(--accent);
+.terminal-line {
+    margin: var(--spacing-xs) 0;
+    font-size: 0.875rem;
 }
 
-.company-subtitle {
-    font-size: 0.875rem;
-    color: var(--text-secondary);
-    margin-top: var(--spacing-xs);
+.terminal-prompt {
+    color: #00FF00;
+    font-weight: 700;
+}
+
+.company-name {
+    color: #00FF00;
+    font-weight: 700;
+    display: inline;
+}
+
+.terminal-stats {
+    color: #888888;
+    margin-top: var(--spacing-sm);
+    font-size: 0.75rem;
+}
+
+.terminal-stat {
+    display: inline-block;
+    margin-right: var(--spacing-md);
 }
 
 /* ============================================================================
-   TABLES
+   TABLES & CAP TABLE
    ============================================================================ */
 
 table {
@@ -329,33 +347,102 @@ tr:hover {
     background: var(--accent-light);
 }
 
+/* Cap Table Progress Bars */
+.ownership-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.ownership-bar {
+    flex: 1;
+    height: 16px;
+    background: #CDDEE9;
+    border-radius: 2px;
+    overflow: hidden;
+    position: relative;
+}
+
+.ownership-fill {
+    height: 100%;
+    background: #294B71;
+    transition: width 0.3s ease;
+}
+
+.ownership-text {
+    font-weight: 700;
+    color: #294B71;
+    min-width: 45px;
+    text-align: right;
+}
+
+/* Total row styling */
+tr.total-row {
+    font-weight: 700;
+    background: #F5F5F5;
+    border-top: 2px solid #294B71;
+}
+
+tr.total-row:hover {
+    background: #F5F5F5;
+}
+
 /* ============================================================================
-   TIMELINE
+   TIMELINE - VERTICAL WITH DOTS
    ============================================================================ */
 
 .timeline-event {
     display: grid;
-    grid-template-columns: 140px 1fr;
-    gap: var(--spacing-md);
+    grid-template-columns: 110px 20px 1fr;
+    gap: var(--spacing-sm);
     padding: var(--spacing-sm) 0;
-    border-bottom: 1px solid var(--border);
+    position: relative;
 }
 
-.timeline-event:last-child {
-    border-bottom: none;
+.timeline-event:not(:last-child) .timeline-dot::after {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: 20px;
+    width: 2px;
+    height: calc(100% + var(--spacing-sm));
+    background: #CDDEE9;
+    transform: translateX(-50%);
 }
 
 .timeline-date {
     font-family: var(--font-mono);
     font-weight: 700;
-    color: var(--accent);
-    font-size: 0.875rem;
+    color: #294B71;
+    font-size: 0.75rem;
+    text-align: right;
+}
+
+.timeline-dot {
+    position: relative;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding-top: 3px;
+}
+
+.timeline-dot::before {
+    content: '';
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #294B71;
+    border: 2px solid var(--bg);
+    box-shadow: 0 0 0 2px #294B71;
+    position: relative;
+    z-index: 1;
 }
 
 .timeline-description {
     font-family: var(--font-mono);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
     color: var(--text);
+    line-height: 1.5;
 }
 
 /* ============================================================================
@@ -400,27 +487,46 @@ tr:hover {
 }
 
 /* ============================================================================
-   DOCUMENT LIST
+   DOCUMENT LIST - CARD GRID
    ============================================================================ */
 
+.documents-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: var(--spacing-md);
+}
+
 .document-category {
-    margin-bottom: var(--spacing-lg);
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--category-color, #294B71);
+    padding: var(--spacing-md);
+    background: var(--bg);
 }
 
 .document-category h3 {
-    font-size: 1rem;
-    margin-bottom: var(--spacing-sm);
+    font-size: 0.875rem;
+    margin: 0 0 var(--spacing-sm) 0;
+    color: var(--text);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.doc-count {
+    color: var(--text-secondary);
+    font-weight: 400;
+    font-size: 0.75rem;
 }
 
 .document-list {
     list-style: none;
     font-family: var(--font-mono);
-    font-size: 0.875rem;
+    font-size: 0.75rem;
 }
 
 .document-list li {
     padding: var(--spacing-xs) 0;
     border-bottom: 1px solid var(--border);
+    color: var(--text-secondary);
 }
 
 .document-list li:last-child {
@@ -431,6 +537,24 @@ tr:hover {
     color: var(--accent);
     font-weight: 700;
     margin-left: var(--spacing-xs);
+}
+
+.verification-badge {
+    font-size: 0.625rem;
+    padding: 2px 4px;
+    margin-left: var(--spacing-xs);
+    border-radius: 2px;
+    font-weight: 700;
+}
+
+.verification-high {
+    background: rgba(0, 200, 0, 0.15);
+    color: #008000;
+}
+
+.verification-low {
+    background: rgba(255, 165, 0, 0.15);
+    color: #FFA500;
 }
 
 /* ============================================================================

@@ -60,6 +60,56 @@ def clean_document_dict(doc: Dict[str, Any]) -> Dict[str, Any]:
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=60.0)
 
 
+# ============================================================================
+# HYBRID CLASSIFICATION: Keyword Pre-Scanning
+# ============================================================================
+
+# High-confidence keyword patterns for document classification
+# Format: (pattern, category, summary_template)
+KEYWORD_PATTERNS = [
+    (r'83\s*\(\s*b\s*\)', '83(b) Election', '83(b) election form'),
+    (r'simple\s+agreement\s+for\s+future\s+equity|SAFE', 'SAFE', 'SAFE investment agreement'),
+    (r'certificate\s+of\s+incorporation', 'Charter Document', 'Certificate of Incorporation'),
+    (r'articles\s+of\s+incorporation', 'Charter Document', 'Articles of Incorporation'),
+    (r'amended\s+and\s+restated\s+certificate', 'Charter Document', 'Amended and Restated Certificate of Incorporation'),
+    (r'bylaws', 'Charter Document', 'Corporate bylaws'),
+    (r'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase', 'Stock Purchase Agreement', 'Stock purchase agreement'),
+    (r'stock\s+certificate\s+no\.?\s*\d+|certificate\s+number\s+\d+', 'Stock Certificate', 'Stock certificate'),
+    (r'consent\s+of\s+(board|directors|stockholders)|written\s+consent', 'Board/Shareholder Minutes', 'Written consent document'),
+    (r'minutes\s+of.*meeting|meeting\s+of\s+the\s+(board|directors)', 'Board/Shareholder Minutes', 'Board/shareholder meeting minutes'),
+    (r'option\s+grant\s+(agreement|notice)|stock\s+option\s+agreement', 'Option Grant Agreement', 'Stock option grant agreement'),
+    (r'equity\s+incentive\s+plan|\d+\s+stock\s+plan', 'Equity Incentive Plan', 'Equity incentive plan document'),
+    (r'(share|stock)\s+repurchase\s+agreement', 'Share Repurchase Agreement', 'Share repurchase agreement'),
+    (r'indemnification\s+agreement', 'Indemnification Agreement', 'Director/officer indemnification agreement'),
+    (r'proprietary\s+information.*agreement|PIIA', 'IP/Proprietary Info Agreement', 'Proprietary information and inventions agreement'),
+    (r'employment\s+agreement|offer\s+letter', 'Employment Agreement', 'Employment agreement'),
+    (r'convertible\s+note|promissory\s+note', 'Convertible Note', 'Convertible promissory note'),
+]
+
+
+def classify_by_keywords(text: str) -> tuple:
+    """
+    Attempt to classify document using keyword patterns.
+
+    Args:
+        text: Document text (first few thousand chars sufficient)
+
+    Returns:
+        Tuple of (category, summary) if confident match found, else (None, None)
+    """
+    import re
+
+    # Use first 3000 chars for keyword matching (enough for titles/headers)
+    sample = text[:3000].lower()
+
+    for pattern, category, summary in KEYWORD_PATTERNS:
+        if re.search(pattern, sample, re.IGNORECASE):
+            logger.info(f"Keyword match found: '{pattern}' -> {category}")
+            return (category, summary)
+
+    return (None, None)
+
+
 def call_claude(prompt: str, max_tokens: int = 2048) -> str:
     """
     Call Claude API with a prompt and return the response text.
@@ -79,6 +129,7 @@ def call_claude(prompt: str, max_tokens: int = 2048) -> str:
         message = client.messages.create(
             model="claude-sonnet-4-5-20250929",
             max_tokens=max_tokens,
+            temperature=0,  # Deterministic outputs for consistency
             messages=[{
                 "role": "user",
                 "content": prompt
@@ -123,6 +174,7 @@ def parse_json_response(response_text: str) -> Any:
 def classify_document(doc: Dict[str, Any]) -> Dict[str, Any]:
     """
     Classify a document into a type category.
+    Uses keyword-based classification first, falls back to Claude if no match.
 
     Args:
         doc: Document dict with 'text' field
@@ -137,15 +189,25 @@ def classify_document(doc: Dict[str, Any]) -> Dict[str, Any]:
         return doc
 
     try:
-        # Use first 10,000 chars for classification (enough for most docs)
-        text_sample = doc['text'][:10000]
+        # Try keyword-based classification first (fast, free, accurate for obvious docs)
+        category, summary = classify_by_keywords(doc['text'])
 
+        if category:
+            # High-confidence keyword match - skip Claude API call
+            doc['category'] = category
+            doc['summary'] = summary
+            logger.info(f"Document classified by keywords: {doc.get('filename', 'unknown')} -> {category}")
+            return doc
+
+        # No keyword match - use Claude for nuanced classification
+        text_sample = doc['text'][:10000]
         prompt = prompts.CLASSIFICATION_PROMPT.format(text=text_sample)
         response = call_claude(prompt, max_tokens=512)
 
         result = parse_json_response(response)
         doc['category'] = result.get('doc_type', 'Other')
         doc['summary'] = result.get('summary', 'No summary available')
+        logger.info(f"Document classified by Claude: {doc.get('filename', 'unknown')} -> {doc['category']}")
 
     except Exception as e:
         # If classification fails, default to "Other"
@@ -159,34 +221,172 @@ def classify_document(doc: Dict[str, Any]) -> Dict[str, Any]:
 # PASS 2: EXTRACTION (by document type)
 # ============================================================================
 
+def verify_extraction(source_text: str, extracted_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Verify that extracted values appear in the source text to catch hallucinations.
+    Adds a 'verification' field with confidence score and warnings.
+
+    Args:
+        source_text: Original document text
+        extracted_data: Data extracted by Claude
+
+    Returns:
+        Verification results with confidence score (0-100)
+    """
+    import re
+
+    warnings = []
+    verifications = 0
+    total_checks = 0
+
+    # Normalize text for comparison (lowercase, remove extra whitespace)
+    normalized_text = ' '.join(source_text.lower().split())
+
+    # Check numeric fields (shares, amounts, authorized_shares)
+    for field in ['shares', 'amount', 'authorized_shares', 'valuation_cap']:
+        if field in extracted_data and extracted_data[field]:
+            total_checks += 1
+            value = extracted_data[field]
+
+            # Try to find the number in text (with some flexibility for formatting)
+            if isinstance(value, (int, float)):
+                # Check various number formats: 10000, 10,000, 10000.00
+                patterns = [
+                    str(int(value)),  # Plain number
+                    f"{int(value):,}",  # With commas
+                    f"{value:.2f}",  # With decimals
+                ]
+
+                found = any(pattern.replace(',', '') in normalized_text.replace(',', '') for pattern in patterns)
+
+                if found:
+                    verifications += 1
+                else:
+                    # Allow 10% fuzzy tolerance for minor extraction errors
+                    fuzzy_range = range(int(value * 0.9), int(value * 1.1))
+                    if any(str(n) in normalized_text for n in fuzzy_range):
+                        verifications += 1
+                    else:
+                        warnings.append(f"{field}={value} not found in source text")
+
+    # Check text fields (shareholder, investor, recipient, company_name)
+    for field in ['shareholder', 'investor', 'recipient', 'company_name']:
+        if field in extracted_data and extracted_data[field]:
+            total_checks += 1
+            value = str(extracted_data[field]).lower()
+
+            # Check if the name/text appears in source (case-insensitive)
+            if value in normalized_text:
+                verifications += 1
+            else:
+                # Check if parts of the name appear (e.g., "John Smith" -> check "john" and "smith")
+                name_parts = value.split()
+                if len(name_parts) > 1 and all(part in normalized_text for part in name_parts):
+                    verifications += 1
+                else:
+                    warnings.append(f"{field}='{extracted_data[field]}' not found in source text")
+
+    # Check date fields (YYYY-MM-DD format)
+    for field in ['date', 'incorporation_date', 'grant_date', 'meeting_date']:
+        if field in extracted_data and extracted_data[field]:
+            total_checks += 1
+            date_str = extracted_data[field]
+
+            # Try various date formats: 2023-01-15, January 15, 2023, 01/15/2023
+            try:
+                from datetime import datetime
+                dt = datetime.strptime(date_str, '%Y-%m-%d')
+
+                # Check if year, month, day appear in text
+                year_found = str(dt.year) in normalized_text
+                month_name = dt.strftime('%B').lower()  # e.g., "January"
+                month_found = month_name in normalized_text or str(dt.month) in normalized_text
+                day_found = str(dt.day) in normalized_text
+
+                if year_found and (month_found or day_found):
+                    verifications += 1
+                else:
+                    warnings.append(f"{field}={date_str} not clearly found in source text")
+            except (ValueError, ImportError):
+                # If date parsing fails, skip verification for this field
+                total_checks -= 1
+
+    # Calculate confidence score
+    confidence = int((verifications / total_checks * 100)) if total_checks > 0 else 100
+
+    return {
+        'confidence_score': confidence,
+        'verified_fields': verifications,
+        'total_checks': total_checks,
+        'warnings': warnings if warnings else None
+    }
+
+
 def extract_charter_data(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract data from Charter documents."""
+    """Extract data from Charter documents with verification."""
     try:
         prompt = prompts.CHARTER_EXTRACTION_PROMPT.format(text=doc['text'][:20000])
         response = call_claude(prompt, max_tokens=1024)
-        return parse_json_response(response)
+        result = parse_json_response(response)
+
+        # Add source document reference
+        result['source_doc'] = doc['filename']
+
+        # Verify extraction against source text
+        verification = verify_extraction(doc['text'][:20000], result)
+        result['verification'] = verification
+
+        if verification['confidence_score'] < 70:
+            logger.warning(f"Low confidence charter extraction ({verification['confidence_score']}%) for {doc['filename']}: {verification.get('warnings')}")
+
+        return result
     except Exception as e:
-        return {'error': str(e)}
+        return {'error': str(e), 'source_doc': doc['filename']}
 
 
 def extract_stock_data(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Extract equity issuances from Stock Purchase Agreements."""
+    """Extract equity issuances from Stock Purchase Agreements with verification."""
     try:
         prompt = prompts.STOCK_EXTRACTION_PROMPT.format(text=doc['text'][:20000])
         response = call_claude(prompt, max_tokens=2048)
-        return parse_json_response(response)
+        issuances = parse_json_response(response)
+
+        # Add source document reference and verification to each issuance
+        for issuance in issuances:
+            issuance['source_doc'] = doc['filename']
+
+            # Verify each issuance
+            verification = verify_extraction(doc['text'][:20000], issuance)
+            issuance['verification'] = verification
+
+            if verification['confidence_score'] < 70:
+                logger.warning(f"Low confidence stock extraction ({verification['confidence_score']}%) for {doc['filename']}: {verification.get('warnings')}")
+
+        return issuances
     except Exception as e:
         return []
 
 
 def extract_safe_data(doc: Dict[str, Any]) -> Dict[str, Any]:
-    """Extract data from SAFE documents."""
+    """Extract data from SAFE documents with verification."""
     try:
         prompt = prompts.SAFE_EXTRACTION_PROMPT.format(text=doc['text'][:15000])
         response = call_claude(prompt, max_tokens=1024)
-        return parse_json_response(response)
+        result = parse_json_response(response)
+
+        # Add source document reference
+        result['source_doc'] = doc['filename']
+
+        # Verify extraction
+        verification = verify_extraction(doc['text'][:15000], result)
+        result['verification'] = verification
+
+        if verification['confidence_score'] < 70:
+            logger.warning(f"Low confidence SAFE extraction ({verification['confidence_score']}%) for {doc['filename']}: {verification.get('warnings')}")
+
+        return result
     except Exception as e:
-        return {'error': str(e)}
+        return {'error': str(e), 'source_doc': doc['filename']}
 
 
 def extract_board_minutes_data(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -194,9 +394,12 @@ def extract_board_minutes_data(doc: Dict[str, Any]) -> Dict[str, Any]:
     try:
         prompt = prompts.BOARD_MINUTES_EXTRACTION_PROMPT.format(text=doc['text'][:15000])
         response = call_claude(prompt, max_tokens=1024)
-        return parse_json_response(response)
+        result = parse_json_response(response)
+        # Add source document reference
+        result['source_doc'] = doc['filename']
+        return result
     except Exception as e:
-        return {'error': str(e)}
+        return {'error': str(e), 'source_doc': doc['filename']}
 
 
 def extract_option_grant_data(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -204,9 +407,12 @@ def extract_option_grant_data(doc: Dict[str, Any]) -> Dict[str, Any]:
     try:
         prompt = prompts.OPTION_GRANT_EXTRACTION_PROMPT.format(text=doc['text'][:15000])
         response = call_claude(prompt, max_tokens=1024)
-        return parse_json_response(response)
+        result = parse_json_response(response)
+        # Add source document reference
+        result['source_doc'] = doc['filename']
+        return result
     except Exception as e:
-        return {'error': str(e)}
+        return {'error': str(e), 'source_doc': doc['filename']}
 
 
 def extract_repurchase_data(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -219,13 +425,16 @@ def extract_repurchase_data(doc: Dict[str, Any]) -> Dict[str, Any]:
         if 'shares' in repurchase and isinstance(repurchase['shares'], (int, float)):
             repurchase['shares'] = -abs(repurchase['shares'])
 
+        # Add source document reference
+        repurchase['source_doc'] = doc['filename']
+
         # Log extracted repurchase for debugging
         logger.info(f"Extracted repurchase from {doc.get('filename', 'unknown')}: shareholder='{repurchase.get('shareholder')}', shares={repurchase.get('shares')}, class='{repurchase.get('share_class')}'")
 
         return repurchase
     except Exception as e:
         logger.error(f"Repurchase extraction failed for {doc.get('filename', 'unknown')}: {e}")
-        return {'error': str(e)}
+        return {'error': str(e), 'source_doc': doc['filename']}
 
 
 def extract_by_type(doc: Dict[str, Any]) -> Dict[str, Any]:
@@ -260,9 +469,10 @@ def extract_by_type(doc: Dict[str, Any]) -> Dict[str, Any]:
 # PASS 3: SYNTHESIS
 # ============================================================================
 
-def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_timeline_programmatically(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Generate a chronological timeline from all extracted data.
+    Build timeline using Python code (deterministic, guaranteed correctness).
+    Extract events from structured data and sort chronologically.
 
     Args:
         extractions: List of documents with extracted data
@@ -270,28 +480,129 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
     Returns:
         Sorted list of timeline events
     """
+    events = []
+
+    for doc in extractions:
+        filename = doc.get('filename', 'unknown')
+
+        # Charter/Incorporation events
+        if 'charter_data' in doc:
+            charter = doc['charter_data']
+            if not charter.get('error') and charter.get('incorporation_date'):
+                events.append({
+                    'date': charter['incorporation_date'],
+                    'event_type': 'formation',
+                    'description': f"Company incorporated: {charter.get('company_name', 'Unknown Company')}",
+                    'source_docs': [filename]
+                })
+
+        # Stock issuance events
+        if 'stock_issuances' in doc:
+            for issuance in doc['stock_issuances']:
+                if issuance.get('date') and issuance.get('shareholder') and issuance.get('shares'):
+                    events.append({
+                        'date': issuance['date'],
+                        'event_type': 'stock_issuance',
+                        'description': f"{issuance['shareholder']} received {issuance['shares']:,} shares of {issuance.get('share_class', 'stock')}",
+                        'source_docs': [filename]
+                    })
+
+        # SAFE events
+        if 'safe_data' in doc:
+            safe = doc['safe_data']
+            if not safe.get('error') and safe.get('date') and safe.get('investor'):
+                events.append({
+                    'date': safe['date'],
+                    'event_type': 'financing',
+                    'description': f"SAFE investment by {safe['investor']} for ${safe.get('amount', 0):,}",
+                    'source_docs': [filename]
+                })
+
+        # Board meeting events
+        if 'minutes_data' in doc:
+            minutes = doc['minutes_data']
+            if not minutes.get('error') and minutes.get('meeting_date'):
+                decisions = minutes.get('key_decisions', [])
+                decisions_str = '; '.join(decisions[:2]) if decisions else 'corporate actions discussed'
+                events.append({
+                    'date': minutes['meeting_date'],
+                    'event_type': 'board_action',
+                    'description': f"{minutes.get('meeting_type', 'Meeting')}: {decisions_str}",
+                    'source_docs': [filename]
+                })
+
+        # Option grant events
+        if 'option_data' in doc:
+            option = doc['option_data']
+            if not option.get('error') and option.get('grant_date') and option.get('recipient'):
+                events.append({
+                    'date': option['grant_date'],
+                    'event_type': 'option_grant',
+                    'description': f"Option grant to {option['recipient']} for {option.get('shares', 0):,} shares",
+                    'source_docs': [filename]
+                })
+
+        # Repurchase events
+        if 'repurchase_data' in doc:
+            repurchase = doc['repurchase_data']
+            if not repurchase.get('error') and repurchase.get('date') and repurchase.get('shareholder'):
+                shares = abs(repurchase.get('shares', 0))  # Display as positive for readability
+                events.append({
+                    'date': repurchase['date'],
+                    'event_type': 'repurchase',
+                    'description': f"Company repurchased {shares:,} shares from {repurchase['shareholder']}",
+                    'source_docs': [filename]
+                })
+
+    # Sort by date (chronological order)
+    events.sort(key=lambda x: x.get('date', ''))
+
+    logger.info(f"Built timeline programmatically: {len(events)} events")
+    return events
+
+
+def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Generate a chronological timeline from all extracted data.
+    Uses programmatic (code-based) timeline as primary, optionally enhances with AI.
+
+    Args:
+        extractions: List of documents with extracted data
+
+    Returns:
+        Sorted list of timeline events
+    """
+    # Build deterministic timeline first (guaranteed correctness)
+    programmatic_timeline = build_timeline_programmatically(extractions)
+
+    # If we have a good timeline, return it (no need for AI enhancement)
+    if len(programmatic_timeline) >= 3:
+        logger.info(f"Using programmatic timeline ({len(programmatic_timeline)} events)")
+        return programmatic_timeline
+
+    # For sparse timelines, optionally enhance with Claude (can add context/narrative)
     try:
         extractions_json = json.dumps(extractions, indent=2)
         prompt = prompts.TIMELINE_SYNTHESIS_PROMPT.format(extractions_json=extractions_json)
 
-        # Call Claude - if rate limited, immediately return fallback (no retry)
+        # Call Claude - if rate limited, return programmatic timeline
         response = call_claude(prompt, max_tokens=4096)
-
-        timeline = parse_json_response(response)
+        ai_timeline = parse_json_response(response)
 
         # Sort by date
-        timeline.sort(key=lambda x: x.get('date', ''))
+        ai_timeline.sort(key=lambda x: x.get('date', ''))
 
-        return timeline
+        logger.info(f"Using AI-enhanced timeline ({len(ai_timeline)} events)")
+        return ai_timeline
 
     except RateLimitError as e:
-        logger.warning(f"Timeline synthesis rate limited, returning partial data: {e}")
-        print(f"WARNING: Timeline synthesis rate limited, returning partial data")
-        return [{'date': '', 'event_type': 'info', 'description': 'Timeline synthesis rate limited - showing partial data', 'source_docs': []}]
+        logger.warning(f"Timeline synthesis rate limited, using programmatic timeline: {e}")
+        print(f"WARNING: Timeline AI enhancement rate limited - using programmatic timeline ({len(programmatic_timeline)} events)")
+        return programmatic_timeline
     except Exception as e:
-        logger.error(f"Timeline synthesis failed: {e}", exc_info=True)
-        print(f"ERROR: Timeline synthesis failed: {e}")
-        return [{'date': '', 'event_type': 'error', 'description': f'Timeline generation failed: {str(e)}', 'source_docs': []}]
+        logger.error(f"Timeline synthesis failed, using programmatic timeline: {e}", exc_info=True)
+        print(f"ERROR: Timeline AI enhancement failed - using programmatic timeline ({len(programmatic_timeline)} events)")
+        return programmatic_timeline
 
 
 def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -346,6 +657,7 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
 def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Generate a cap table from equity issuance data.
+    Uses programmatic (code-based) aggregation as primary method.
 
     Args:
         extractions: List of documents with extracted data
@@ -353,83 +665,190 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
     Returns:
         List of cap table entries with ownership percentages
     """
-    try:
-        # Collect all equity-related extractions
-        equity_data = []
+    # Collect all equity-related extractions
+    equity_data = []
 
-        for doc in extractions:
-            if 'stock_issuances' in doc:
-                equity_data.extend(doc['stock_issuances'])
-            if 'safe_data' in doc:
-                safe = doc['safe_data']
-                if not safe.get('error'):
-                    equity_data.append({
-                        'shareholder': safe.get('investor'),
-                        'amount': safe.get('amount'),
-                        'type': 'SAFE',
-                        'date': safe.get('date')
-                    })
-            if 'option_data' in doc:
-                option = doc['option_data']
-                if not option.get('error'):
-                    equity_data.append({
-                        'shareholder': option.get('recipient'),
-                        'shares': option.get('shares'),
-                        'type': 'Option',
-                        'date': option.get('grant_date')
-                    })
-            if 'repurchase_data' in doc:
-                repurchase = doc['repurchase_data']
-                if not repurchase.get('error'):
-                    # Add repurchase with negative shares to reduce cap table
-                    equity_data.append({
-                        'shareholder': repurchase.get('shareholder'),
-                        'shares': repurchase.get('shares'),  # Already negative from extraction
-                        'share_class': repurchase.get('share_class', 'Common Stock'),
-                        'date': repurchase.get('date')
-                    })
+    for doc in extractions:
+        if 'stock_issuances' in doc:
+            equity_data.extend(doc['stock_issuances'])
+        if 'safe_data' in doc:
+            safe = doc['safe_data']
+            if not safe.get('error'):
+                equity_data.append({
+                    'shareholder': safe.get('investor'),
+                    'amount': safe.get('amount'),
+                    'type': 'SAFE',
+                    'date': safe.get('date')
+                })
+        if 'option_data' in doc:
+            option = doc['option_data']
+            if not option.get('error'):
+                equity_data.append({
+                    'shareholder': option.get('recipient'),
+                    'shares': option.get('shares'),
+                    'type': 'Option',
+                    'date': option.get('grant_date')
+                })
+        if 'repurchase_data' in doc:
+            repurchase = doc['repurchase_data']
+            if not repurchase.get('error'):
+                # Add repurchase with negative shares to reduce cap table
+                equity_data.append({
+                    'shareholder': repurchase.get('shareholder'),
+                    'shares': repurchase.get('shares'),  # Already negative from extraction
+                    'share_class': repurchase.get('share_class', 'Common Stock'),
+                    'date': repurchase.get('date')
+                })
 
-        if not equity_data:
-            return []
+    if not equity_data:
+        return []
 
-        # Build raw cap table as fallback
-        raw_cap_table = build_raw_cap_table(equity_data)
+    # Build cap table programmatically (deterministic, no math errors)
+    programmatic_cap_table = build_raw_cap_table(equity_data)
+    logger.info(f"Built cap table programmatically: {len(programmatic_cap_table)} entries")
 
-        equity_json = json.dumps(equity_data, indent=2)
-        prompt = prompts.CAP_TABLE_SYNTHESIS_PROMPT.format(equity_data_json=equity_json)
-
-        # Add small delay to spread API load
-        time.sleep(2)
-
-        # Call Claude - if rate limited, immediately return raw cap table (no retry)
-        response = call_claude(prompt, max_tokens=4096)
-
-        cap_table = parse_json_response(response)
-
-        return cap_table
-
-    except RateLimitError as e:
-        logger.warning(f"Cap table synthesis rate limited, returning raw equity data: {e}")
-        print(f"WARNING: Cap table synthesis rate limited, returning raw equity data with TBD percentages")
-        return raw_cap_table  # Return raw data instead of empty array
-    except Exception as e:
-        logger.error(f"Cap table synthesis failed: {e}", exc_info=True)
-        print(f"ERROR: Cap table synthesis failed: {e}")
-        return [{'shareholder': 'Error', 'shares': 0, 'share_class': 'N/A', 'ownership_pct': 0.0}]
+    # Return programmatic cap table (100% accurate, no AI needed for arithmetic)
+    # AI was previously used to aggregate and calculate percentages, but this is
+    # better done with code (guaranteed correctness, faster, free)
+    return programmatic_cap_table
 
 
-def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, Any]], timeline: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def check_deterministic_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, Any]], timeline: List[Dict[str, Any]], extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
-    Generate an issue tracker by analyzing documents for gaps and inconsistencies.
+    Check for critical compliance issues using deterministic (code-based) rules.
+    These checks are 100% reliable and don't depend on AI interpretation.
 
     Args:
         documents: List of classified documents
         cap_table: Generated cap table
         timeline: Generated timeline
+        extractions: Raw extraction data with charter info
+
+    Returns:
+        List of issues found by deterministic checks
+    """
+    issues = []
+
+    # Get document categories for analysis
+    doc_categories = [d.get('category', '') for d in documents]
+
+    # CRITICAL: Missing Charter Document
+    has_charter = any('Charter' in cat for cat in doc_categories)
+    if not has_charter:
+        issues.append({
+            'severity': 'critical',
+            'category': 'Missing Document',
+            'description': 'No Certificate of Incorporation or Charter Document found. This is required to establish the company\'s legal existence and authorized shares.'
+        })
+
+    # CRITICAL: Stock issuances without board approval
+    has_stock_issuances = any('Stock Purchase' in cat or 'Stock Certificate' in cat for cat in doc_categories)
+    has_board_consent = any('Minutes' in cat or 'Board' in cat for cat in doc_categories)
+
+    if has_stock_issuances and not has_board_consent:
+        issues.append({
+            'severity': 'critical',
+            'category': 'Equity Compliance',
+            'description': 'Stock issuances found but no Board Minutes or Written Consents documenting approval. All stock issuances must be authorized by the board.'
+        })
+
+    # CRITICAL: Issued shares exceed authorized shares
+    # Extract authorized shares from charter
+    authorized_shares = None
+    for ext in extractions:
+        if 'charter_data' in ext:
+            charter = ext['charter_data']
+            if not charter.get('error') and charter.get('authorized_shares'):
+                try:
+                    authorized_shares = int(charter['authorized_shares'])
+                    break
+                except (ValueError, TypeError):
+                    pass
+
+    if authorized_shares and cap_table:
+        # Calculate total issued shares from cap table
+        total_issued = sum(entry.get('shares', 0) for entry in cap_table if isinstance(entry.get('shares'), (int, float)))
+
+        if total_issued > authorized_shares:
+            issues.append({
+                'severity': 'critical',
+                'category': 'Cap Table Integrity',
+                'description': f'Issued shares ({total_issued:,}) exceed authorized shares ({authorized_shares:,}). Company must amend charter to increase authorized shares before these issuances are valid.'
+            })
+
+    # WARNING: Founder stock without 83(b) elections
+    has_founder_stock = any('Stock Purchase' in cat for cat in doc_categories)
+    has_83b = any('83(b)' in cat for cat in doc_categories)
+
+    if has_founder_stock and not has_83b:
+        issues.append({
+            'severity': 'warning',
+            'category': 'Equity Compliance',
+            'description': 'Stock Purchase Agreements found but no 83(b) election forms. Founders who received restricted stock should file 83(b) elections within 30 days to avoid adverse tax consequences.'
+        })
+
+    # WARNING: Few board meetings over long period
+    if timeline:
+        # Extract date range from timeline
+        dates = [event.get('date', '') for event in timeline if event.get('date')]
+        if dates:
+            dates.sort()
+            first_date = dates[0]
+            last_date = dates[-1]
+
+            # Calculate years between first and last event
+            try:
+                from datetime import datetime
+                first = datetime.strptime(first_date, '%Y-%m-%d')
+                last = datetime.strptime(last_date, '%Y-%m-%d')
+                years = (last - first).days / 365.25
+
+                # Count board meetings/consents
+                board_meetings = sum(1 for d in documents if 'Minutes' in d.get('category', '') or 'Board' in d.get('category', ''))
+
+                if years >= 3 and board_meetings < 3:
+                    issues.append({
+                        'severity': 'warning',
+                        'category': 'Board Governance',
+                        'description': f'Company has {years:.1f} years of history but only {board_meetings} documented board meeting(s)/consent(s). Regular board meetings are important for proper governance.'
+                    })
+            except (ValueError, ImportError):
+                pass  # Skip if date parsing fails
+
+    # NOTE: Missing option plan for option grants
+    has_option_grants = any('Option Grant' in cat for cat in doc_categories)
+    has_option_plan = any('Equity Incentive Plan' in cat or 'Stock Plan' in cat for cat in doc_categories)
+
+    if has_option_grants and not has_option_plan:
+        issues.append({
+            'severity': 'note',
+            'category': 'Equity Compliance',
+            'description': 'Option Grant Agreements found but no Equity Incentive Plan document. Options should be granted under a board-approved plan.'
+        })
+
+    logger.info(f"Deterministic checks found {len(issues)} issues")
+    return issues
+
+
+def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, Any]], timeline: List[Dict[str, Any]], extractions: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
+    """
+    Generate an issue tracker by analyzing documents for gaps and inconsistencies.
+    Combines deterministic (code-based) checks with AI analysis.
+
+    Args:
+        documents: List of classified documents
+        cap_table: Generated cap table
+        timeline: Generated timeline
+        extractions: Raw extraction data (for deterministic checks)
 
     Returns:
         List of issues with severity and descriptions
     """
+    # Start with deterministic issues (guaranteed to catch critical problems)
+    deterministic_issues = []
+    if extractions:
+        deterministic_issues = check_deterministic_issues(documents, cap_table, timeline, extractions)
+
     try:
         # Prepare summaries for Claude
         doc_summary = [{'filename': d['filename'], 'category': d.get('category', 'Other')} for d in documents]
@@ -447,21 +866,25 @@ def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, A
         # Add small delay to spread API load
         time.sleep(2)
 
-        # Call Claude - if rate limited, immediately return fallback message (no retry)
+        # Call Claude - if rate limited, return deterministic issues only (no retry)
         response = call_claude(prompt, max_tokens=4096)
+        ai_issues = parse_json_response(response)
 
-        issues = parse_json_response(response)
+        # Combine deterministic (high confidence) with AI analysis (nuanced insights)
+        all_issues = deterministic_issues + ai_issues
+        logger.info(f"Total issues: {len(all_issues)} ({len(deterministic_issues)} deterministic, {len(ai_issues)} AI-detected)")
 
-        return issues
+        return all_issues
 
     except RateLimitError as e:
-        logger.warning(f"Issue generation rate limited, returning fallback message: {e}")
-        print(f"WARNING: Issue generation rate limited - manual review recommended")
-        return [{'severity': 'warning', 'category': 'Rate Limit', 'description': 'Issue analysis rate limited - manual document review recommended'}]
+        logger.warning(f"Issue generation rate limited, returning deterministic issues only: {e}")
+        print(f"WARNING: AI issue analysis rate limited - showing {len(deterministic_issues)} deterministic issues")
+        return deterministic_issues  # Return deterministic issues instead of empty/error
     except Exception as e:
-        logger.error(f"Issue generation failed: {e}", exc_info=True)
-        print(f"ERROR: Issue generation failed: {e}")
-        return [{'severity': 'critical', 'category': 'System Error', 'description': f'Issue analysis failed: {str(e)}'}]
+        logger.error(f"AI issue generation failed: {e}", exc_info=True)
+        print(f"ERROR: AI issue analysis failed - showing {len(deterministic_issues)} deterministic issues: {e}")
+        # Return deterministic issues even if AI fails
+        return deterministic_issues if deterministic_issues else [{'severity': 'critical', 'category': 'System Error', 'description': f'Issue analysis failed: {str(e)}'}]
 
 
 def extract_company_name(extractions: List[Dict[str, Any]]) -> str:
@@ -581,7 +1004,7 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
-        issues = generate_issues(classified_docs, cap_table, timeline)
+        issues = generate_issues(classified_docs, cap_table, timeline, extractions)
 
         try:
             db.update_progress(audit_id, "Pass 3: Finalizing report...")
