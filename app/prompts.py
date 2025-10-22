@@ -32,93 +32,29 @@ DOC_CATEGORIES = [
 # PASS 1: CLASSIFICATION
 # ============================================================================
 
-CLASSIFICATION_PROMPT = """You are an expert paralegal AI specializing in corporate governance for startups.
+CLASSIFICATION_PROMPT = """You are a corporate paralegal classifying legal documents for a startup.
 
-Analyze the document excerpt below and classify it into the MOST SPECIFIC category.
+EXAMPLES OF CORRECT CLASSIFICATIONS:
+- "CERTIFICATE OF INCORPORATION OF ACME, INC." → Charter Document
+- "Common Stock Certificate No. 001 - Jake Sortor - 9,000,000 shares" → Stock Certificate
+- "Acme Pitch Deck - Series A Fundraising" → Marketing Materials
+- "Restricted Stock Purchase Agreement between Acme, Inc. and John Smith" → Stock Purchase Agreement
+- "Employee Proprietary Information and Inventions Agreement" → IP/Proprietary Info Agreement
 
-DOCUMENT EXCERPT:
+AVAILABLE CATEGORIES:
+Charter Document, Board/Shareholder Minutes, Stock Purchase Agreement, Stock Certificate, Assignment Agreement, Share Repurchase Agreement, 83(b) Election, Indemnification Agreement, IP/Proprietary Info Agreement, Corporate Records, Tax Document, Marketing Materials, License Agreement, SAFE, Convertible Note, Option Grant Agreement, Equity Incentive Plan, Financial Statement, Employment Agreement, Other
+
+DOCUMENT TO CLASSIFY:
 ---
 {text}
 ---
 
-CLASSIFICATION STRATEGY:
-1. Look at the FIRST 200 characters - this usually contains the document title/header
-2. Match document title to the most specific category below
-3. If title is ambiguous, read the content to understand the document's purpose
-4. Choose the MOST SPECIFIC category that fits (not "Other")
+INSTRUCTIONS:
+1. Read the document title and first few paragraphs
+2. Match to the MOST SPECIFIC category that fits
+3. Use "Other" only if document truly doesn't fit any category
 
-CATEGORIES (with explicit text patterns to look for):
-
-- Charter Document:
-  * Starts with "CERTIFICATE OF INCORPORATION OF" or "ARTICLES OF INCORPORATION"
-  * Contains "BYLAWS OF" near the top
-  * "CERTIFICATE OF SECRETARY" certifying bylaws
-
-- Board/Shareholder Minutes:
-  * Titles like "ACTION BY WRITTEN CONSENT", "BOARD MEETING MINUTES", "SHAREHOLDER CONSENT"
-  * NOT pitch decks or presentations (those are Marketing Materials)
-
-- Stock Purchase Agreement:
-  * "RESTRICTED STOCK PURCHASE AGREEMENT"
-  * "STOCK SUBSCRIPTION AGREEMENT"
-  * "JOINT ESCROW INSTRUCTIONS" (part of stock purchase)
-  * "STOCK PURCHASE VERIFICATION" (receipt/confirmation)
-
-- Stock Certificate:
-  * Header says "COMMON STOCK CERTIFICATE" or "PREFERRED STOCK CERTIFICATE"
-  * Formal certificate with share numbers
-
-- Assignment Agreement:
-  * "ASSIGNMENT AGREEMENT" or "ASSIGNMENT SEPARATE FROM CERTIFICATE"
-  * Transferring shares or IP
-
-- Share Repurchase Agreement:
-  * Contains "REPURCHASE" in title or content
-  * Company buying back shares from shareholder
-
-- 83(b) Election:
-  * IRS form with "SECTION 83(b)" election language
-
-- Indemnification Agreement:
-  * "INDEMNIFICATION AGREEMENT" for directors/officers
-
-- IP/Proprietary Info Agreement:
-  * "EMPLOYEE PROPRIETARY INFORMATION" agreement
-  * "INVENTION ASSIGNMENT AGREEMENT"
-  * Protecting company IP from employees
-
-- Corporate Records:
-  * EIN assignment letters
-  * Bank account verification letters
-  * Good standing certificates
-
-- Tax Document:
-  * "FRANCHISE TAX REPORT", "TAX PAYMENT RECEIPT"
-  * "ANNUAL REPORT" (state filings)
-
-- Marketing Materials:
-  * Pitch deck with "Slide 1", "Slide 2" or investor presentation content
-  * Technology sheets, product brochures
-  * NOT board minutes or consents
-
-- License Agreement:
-  * University or government technology licenses
-  * Patent licenses (e.g., NASA license)
-
-- Employment Agreement:
-  * Employment contracts, offer letters
-  * "ADVISOR AGREEMENT" or "CONSULTING AGREEMENT"
-
-- Other:
-  * ONLY use if document doesn't match ANY category above
-  * Should be rare (<10% of documents)
-
-CRITICAL: Look at the document title first. For example:
-- "Certificate of Incorporation of Acme Inc." → Charter Document
-- "Rehydrate Pitch Deck" → Marketing Materials
-- "Employee Proprietary Information Agreement" → IP/Proprietary Info Agreement
-
-Respond ONLY with valid JSON:
+Respond with ONLY valid JSON:
 {{"doc_type": "Category Name", "summary": "One sentence summary"}}"""
 
 

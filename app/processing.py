@@ -218,8 +218,13 @@ def extract_repurchase_data(doc: Dict[str, Any]) -> Dict[str, Any]:
         # Make shares negative to subtract from cap table
         if 'shares' in repurchase and isinstance(repurchase['shares'], (int, float)):
             repurchase['shares'] = -abs(repurchase['shares'])
+
+        # Log extracted repurchase for debugging
+        logger.info(f"Extracted repurchase from {doc.get('filename', 'unknown')}: shareholder='{repurchase.get('shareholder')}', shares={repurchase.get('shares')}, class='{repurchase.get('share_class')}'")
+
         return repurchase
     except Exception as e:
+        logger.error(f"Repurchase extraction failed for {doc.get('filename', 'unknown')}: {e}")
         return {'error': str(e)}
 
 
