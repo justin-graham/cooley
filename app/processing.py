@@ -546,11 +546,14 @@ def build_timeline_programmatically(extractions: List[Dict[str, Any]]) -> List[D
         if 'repurchase_data' in doc:
             repurchase = doc['repurchase_data']
             if not repurchase.get('error') and repurchase.get('date') and repurchase.get('shareholder'):
-                shares = abs(repurchase.get('shares', 0))  # Display as positive for readability
+                # Handle None shares values
+                shares = repurchase.get('shares') or 0
+                shares = abs(shares) if isinstance(shares, (int, float)) else 0
+
                 events.append({
                     'date': repurchase['date'],
                     'event_type': 'repurchase',
-                    'description': f"Company repurchased {shares:,} shares from {repurchase['shareholder']}",
+                    'description': f"Company repurchased {shares:,} shares from {repurchase['shareholder']}" if shares > 0 else f"Share repurchase transaction with {repurchase['shareholder']}",
                     'source_docs': [filename]
                 })
 

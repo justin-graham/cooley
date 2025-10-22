@@ -29,7 +29,7 @@ function getProgressStep(message) {
     const msg = message.toLowerCase();
 
     // Check specific phase markers FIRST (before generic keywords)
-    if (msg.includes('pass 1') || msg.includes('classifying document')) {
+    if (msg.includes('pass 1') || msg.includes('classifying')) {
         return 'Classifying';
     } else if (msg.includes('pass 2') || msg.includes('extracting data')) {
         return 'Analyzing';
@@ -37,7 +37,7 @@ function getProgressStep(message) {
         return 'Synthesizing';
     } else if (msg.includes('complete')) {
         return 'Complete';
-    } else if (msg.includes('parsing document') || msg.includes('found') && msg.includes('files')) {
+    } else if (msg.includes('parsing') || (msg.includes('found') && msg.includes('files'))) {
         return 'Extracting';
     } else if (msg.includes('extracting files') || msg.includes('starting')) {
         return 'Uploading';
