@@ -253,13 +253,8 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
         extractions_json = json.dumps(extractions, indent=2)
         prompt = prompts.TIMELINE_SYNTHESIS_PROMPT.format(extractions_json=extractions_json)
 
-        # Try with rate limit retry
-        try:
-            response = call_claude(prompt, max_tokens=4096)
-        except RateLimitError as rate_err:
-            logger.warning(f"Rate limit hit during timeline synthesis, waiting 60s and retrying...")
-            time.sleep(60)
-            response = call_claude(prompt, max_tokens=4096)
+        # Call Claude - if rate limited, immediately return fallback (no retry)
+        response = call_claude(prompt, max_tokens=4096)
 
         timeline = parse_json_response(response)
 
@@ -269,9 +264,9 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
         return timeline
 
     except RateLimitError as e:
-        logger.error(f"Timeline synthesis failed after retry: Rate limit still exceeded")
-        print(f"ERROR: Timeline synthesis rate limited: {e}")
-        return [{'date': '', 'event_type': 'info', 'description': 'Timeline generation rate limited - please retry later', 'source_docs': []}]
+        logger.warning(f"Timeline synthesis rate limited, returning partial data: {e}")
+        print(f"WARNING: Timeline synthesis rate limited, returning partial data")
+        return [{'date': '', 'event_type': 'info', 'description': 'Timeline synthesis rate limited - showing partial data', 'source_docs': []}]
     except Exception as e:
         logger.error(f"Timeline synthesis failed: {e}", exc_info=True)
         print(f"ERROR: Timeline synthesis failed: {e}")
@@ -364,23 +359,18 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
         prompt = prompts.CAP_TABLE_SYNTHESIS_PROMPT.format(equity_data_json=equity_json)
 
         # Add small delay to spread API load
-        time.sleep(5)  # Increased from 2s to 5s
+        time.sleep(2)
 
-        # Try with rate limit retry
-        try:
-            response = call_claude(prompt, max_tokens=4096)
-        except RateLimitError as rate_err:
-            logger.warning(f"Rate limit hit during cap table synthesis, waiting 60s and retrying...")
-            time.sleep(60)
-            response = call_claude(prompt, max_tokens=4096)
+        # Call Claude - if rate limited, immediately return raw cap table (no retry)
+        response = call_claude(prompt, max_tokens=4096)
 
         cap_table = parse_json_response(response)
 
         return cap_table
 
     except RateLimitError as e:
-        logger.error(f"Cap table synthesis failed after retry: Rate limit still exceeded")
-        print(f"ERROR: Cap table synthesis rate limited, returning raw equity data: {e}")
+        logger.warning(f"Cap table synthesis rate limited, returning raw equity data: {e}")
+        print(f"WARNING: Cap table synthesis rate limited, returning raw equity data with TBD percentages")
         return raw_cap_table  # Return raw data instead of empty array
     except Exception as e:
         logger.error(f"Cap table synthesis failed: {e}", exc_info=True)
@@ -415,24 +405,19 @@ def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, A
         )
 
         # Add small delay to spread API load
-        time.sleep(5)  # Increased from 2s to 5s
+        time.sleep(2)
 
-        # Try with rate limit retry
-        try:
-            response = call_claude(prompt, max_tokens=4096)
-        except RateLimitError as rate_err:
-            logger.warning(f"Rate limit hit during issue generation, waiting 60s and retrying...")
-            time.sleep(60)
-            response = call_claude(prompt, max_tokens=4096)
+        # Call Claude - if rate limited, immediately return fallback message (no retry)
+        response = call_claude(prompt, max_tokens=4096)
 
         issues = parse_json_response(response)
 
         return issues
 
     except RateLimitError as e:
-        logger.error(f"Issue generation failed after retry: Rate limit still exceeded")
-        print(f"ERROR: Issue generation rate limited: {e}")
-        return [{'severity': 'warning', 'category': 'Rate Limit', 'description': 'Issue analysis rate limited - partial results returned'}]
+        logger.warning(f"Issue generation rate limited, returning fallback message: {e}")
+        print(f"WARNING: Issue generation rate limited - manual review recommended")
+        return [{'severity': 'warning', 'category': 'Rate Limit', 'description': 'Issue analysis rate limited - manual document review recommended'}]
     except Exception as e:
         logger.error(f"Issue generation failed: {e}", exc_info=True)
         print(f"ERROR: Issue generation failed: {e}")
@@ -537,7 +522,7 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
 
         # ========== PASS 3: SYNTHESIS ==========
         try:
-            db.update_progress(audit_id, "Pass 3: Building timeline...")
+            db.update_progress(audit_id, "Pass 3: Synthesizing timeline...")
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
             print(f"ERROR: Failed to update progress: {e}")
@@ -545,21 +530,21 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
         timeline = synthesize_timeline(extractions)
 
         try:
-            db.update_progress(audit_id, "Pass 3: Generating cap table...")
+            db.update_progress(audit_id, "Pass 3: Synthesizing cap table...")
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
         cap_table = synthesize_cap_table(extractions)
 
         try:
-            db.update_progress(audit_id, "Pass 3: Analyzing for issues...")
+            db.update_progress(audit_id, "Pass 3: Synthesizing issues...")
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
         issues = generate_issues(classified_docs, cap_table, timeline)
 
         try:
-            db.update_progress(audit_id, "Pass 3: Extracting company name...")
+            db.update_progress(audit_id, "Pass 3: Finalizing report...")
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 

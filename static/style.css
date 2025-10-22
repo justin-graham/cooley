@@ -240,38 +240,32 @@ p {
     display: block;
 }
 
-/* Animated Loader */
+/* Animated Loader - Horizontal Dots */
 .loader {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    display: inline-block;
-    border-top: 4px solid var(--accent);
-    border-right: 4px solid transparent;
-    box-sizing: border-box;
-    animation: rotation 1s linear infinite;
+    width: 90px;
+    height: 14px;
+    box-shadow: 0 3px 0 #fff;
+    display: grid;
 }
 
-.loader::after {
-    content: '';
-    box-sizing: border-box;
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    border-left: 4px solid #D42B1E;
-    border-bottom: 4px solid transparent;
-    animation: rotation 0.5s linear infinite reverse;
+.loader:before,
+.loader:after {
+    content: "";
+    grid-area: 1/1;
+    background: radial-gradient(circle closest-side, var(--c, var(--accent)) 92%, #0000) 0 0/calc(100%/4) 100%;
+    animation: l4 1s infinite linear;
 }
 
-@keyframes rotation {
-    0% {
-        transform: rotate(0deg);
-    }
+.loader:after {
+    --c: #000;
+    background-color: #fff;
+    box-shadow: 0 -2px 0 0 #fff;
+    clip-path: inset(-2px calc(50% - 10px));
+}
+
+@keyframes l4 {
     100% {
-        transform: rotate(360deg);
+        background-position: calc(100%/3) 0;
     }
 }
 

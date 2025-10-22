@@ -30,13 +30,13 @@ function getProgressStep(message) {
 
     if (msg.includes('upload') || msg.includes('starting')) {
         return 'Uploading';
-    } else if (msg.includes('parsing') || msg.includes('extract')) {
+    } else if (msg.includes('parsing') || msg.includes('extraction')) {
         return 'Extracting';
     } else if (msg.includes('pass 1') || msg.includes('classifying')) {
         return 'Classifying';
     } else if (msg.includes('pass 2') || msg.includes('extracting data')) {
         return 'Analyzing';
-    } else if (msg.includes('pass 3') || msg.includes('synthesizing')) {
+    } else if (msg.includes('pass 3') || msg.includes('synthesizing') || msg.includes('building') || msg.includes('generating') || msg.includes('finalizing')) {
         return 'Synthesizing';
     } else if (msg.includes('complete')) {
         return 'Complete';
