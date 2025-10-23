@@ -69,12 +69,13 @@ client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=60.0)
 KEYWORD_PATTERNS = [
     (r'83\s*\(\s*b\s*\)', '83(b) Election', '83(b) election form'),
     (r'simple\s+agreement\s+for\s+future\s+equity|SAFE', 'SAFE', 'SAFE investment agreement'),
-    (r'certificate\s+of\s+incorporation', 'Charter Document', 'Certificate of Incorporation'),
+    # Stock certificate must be checked BEFORE general "certificate of" patterns
+    (r'stock\s+certificate|certificate\s+(no\.?|number)\s*\d+', 'Stock Certificate', 'Stock certificate'),
+    (r'certificate\s+of\s+(incorporation|formation)', 'Charter Document', 'Certificate of Incorporation'),
     (r'articles\s+of\s+incorporation', 'Charter Document', 'Articles of Incorporation'),
     (r'amended\s+and\s+restated\s+certificate', 'Charter Document', 'Amended and Restated Certificate of Incorporation'),
     (r'bylaws', 'Charter Document', 'Corporate bylaws'),
     (r'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase', 'Stock Purchase Agreement', 'Stock purchase agreement'),
-    (r'stock\s+certificate\s+no\.?\s*\d+|certificate\s+number\s+\d+', 'Stock Certificate', 'Stock certificate'),
     (r'consent\s+of\s+(board|directors|stockholders)|written\s+consent', 'Board/Shareholder Minutes', 'Written consent document'),
     (r'minutes\s+of.*meeting|meeting\s+of\s+the\s+(board|directors)', 'Board/Shareholder Minutes', 'Board/shareholder meeting minutes'),
     (r'option\s+grant\s+(agreement|notice)|stock\s+option\s+agreement', 'Option Grant Agreement', 'Stock option grant agreement'),
@@ -654,6 +655,14 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
     # Sort by ownership percentage descending
     cap_table.sort(key=lambda x: x['ownership_pct'], reverse=True)
 
+    # Adjust last entry to ensure total = exactly 100.00%
+    if cap_table:
+        calculated_total = sum(entry['ownership_pct'] for entry in cap_table)
+        if calculated_total != 100.0:
+            adjustment = round(100.0 - calculated_total, 2)
+            cap_table[-1]['ownership_pct'] = round(cap_table[-1]['ownership_pct'] + adjustment, 2)
+            logger.info(f"Adjusted last cap table entry by {adjustment}% to ensure 100% total")
+
     return cap_table
 
 
@@ -695,13 +704,39 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
         if 'repurchase_data' in doc:
             repurchase = doc['repurchase_data']
             if not repurchase.get('error'):
-                # Add repurchase with negative shares to reduce cap table
-                equity_data.append({
-                    'shareholder': repurchase.get('shareholder'),
-                    'shares': repurchase.get('shares'),  # Already negative from extraction
-                    'share_class': repurchase.get('share_class', 'Common Stock'),
-                    'date': repurchase.get('date')
-                })
+                shares = repurchase.get('shares')
+                shareholder = repurchase.get('shareholder')
+                share_class = repurchase.get('share_class', 'Common Stock')
+
+                # If shares not extracted from repurchase doc, infer from original issuance
+                if shares is None and shareholder:
+                    logger.info(f"Repurchase shares=None for {shareholder}, attempting to infer from issuances...")
+
+                    # Find matching shareholder's stock issuances
+                    matching_issuances = [
+                        item for item in equity_data
+                        if (item.get('shareholder') == shareholder and
+                            item.get('shares') and
+                            isinstance(item.get('shares'), (int, float)) and
+                            item.get('shares') > 0)
+                    ]
+
+                    if matching_issuances:
+                        # Use the first matching issuance amount
+                        shares = matching_issuances[0]['shares']
+                        logger.info(f"Inferred repurchase amount for {shareholder}: {shares} shares")
+                    else:
+                        logger.warning(f"Could not infer repurchase shares for {shareholder} - no matching issuances found")
+
+                # Add repurchase with negative shares to subtract from cap table
+                if shares and isinstance(shares, (int, float)):
+                    equity_data.append({
+                        'shareholder': shareholder,
+                        'shares': -abs(shares),  # Make negative to subtract
+                        'share_class': share_class,
+                        'date': repurchase.get('date')
+                    })
+                    logger.info(f"Added repurchase: {shareholder} -{abs(shares)} shares")
 
     if not equity_data:
         return []

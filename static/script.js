@@ -264,17 +264,6 @@ function renderCompanyHeader(results) {
 function renderDocuments(documents) {
     const container = document.getElementById('documents-content');
 
-    // Category colors (using provided palette)
-    const categoryColors = {
-        'Charter Document': '#294B71',
-        'Stock Purchase Agreement': '#000000',
-        'Board/Shareholder Minutes': '#CDDEE9',
-        'SAFE': '#294B71',
-        'Option Grant Agreement': '#000000',
-        'Share Repurchase Agreement': '#D42B1E',
-        '83(b) Election': '#294B71'
-    };
-
     // Group documents by category
     const grouped = documents.reduce((acc, doc) => {
         const category = doc.category || 'Other';
@@ -283,13 +272,12 @@ function renderDocuments(documents) {
         return acc;
     }, {});
 
-    // Render card grid
+    // Render card grid (all collapsed by default)
     let html = '<div class="documents-grid">';
     for (const [category, docs] of Object.entries(grouped)) {
-        const color = categoryColors[category] || '#666666';
         html += `
-            <div class="document-category" style="--category-color: ${color}">
-                <h3>${category} <span class="doc-count">(${docs.length})</span></h3>
+            <div class="document-category collapsed">
+                <h3 onclick="toggleCategory(this)">${category} <span class="doc-count">(${docs.length})</span></h3>
                 <ul class="document-list">
                     ${docs.map(doc => `
                         <li>
@@ -463,4 +451,13 @@ function formatNumber(num) {
 function formatPercent(num) {
     if (num == null || isNaN(num)) return 'N/A';
     return `${num.toFixed(2)}%`;
+}
+
+/**
+ * Toggle document category collapse/expand
+ */
+function toggleCategory(header) {
+    const category = header.parentElement;
+    category.classList.toggle('collapsed');
+    category.classList.toggle('expanded');
 }

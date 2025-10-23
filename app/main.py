@@ -163,14 +163,16 @@ async def health_check():
 # BACKGROUND TASK
 # ============================================================================
 
-async def process_documents_task(audit_id: str, zip_path: str):
+def process_documents_task(audit_id: str, zip_path: str):
     """
     Background task to process uploaded documents.
+    Changed to sync to avoid blocking FastAPI event loop with sync DB/file operations.
 
     Args:
         audit_id: UUID of the audit
         zip_path: Path to the uploaded zip file
     """
+    import asyncio
     extract_dir = None
     logger = logging.getLogger(__name__)
 
@@ -204,10 +206,14 @@ async def process_documents_task(audit_id: str, zip_path: str):
         for i, file_path in enumerate(file_paths, start=1):
             filename = os.path.basename(file_path)
 
-            try:
-                db.update_progress(audit_id, f"Parsing documents... {i}/{len(file_paths)}")
-            except Exception as e:
-                logger.error(f"Failed to update progress: {e}")
+            # Update progress every 5 docs, on first, and on last for better UX
+            if i % 5 == 1 or i == 1 or i == len(file_paths):
+                try:
+                    # Truncate filename to 40 chars for clean display
+                    display_name = filename[:40] + "..." if len(filename) > 40 else filename
+                    db.update_progress(audit_id, f"Parsing document {i}/{len(file_paths)}: {display_name}")
+                except Exception as e:
+                    logger.error(f"Failed to update progress: {e}")
 
             # Parse with timeout to prevent hanging
             logger.info(f"Parsing document {i}/{len(file_paths)}: {filename}")
@@ -215,10 +221,10 @@ async def process_documents_task(audit_id: str, zip_path: str):
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(utils.parse_document, file_path)
             try:
-                doc = future.result(timeout=30)  # 30 second timeout per document
+                doc = future.result(timeout=20)  # 20 second timeout per document
                 logger.info(f"Successfully parsed: {filename}")
             except TimeoutError:
-                logger.error(f"Timeout parsing {filename} after 30 seconds")
+                logger.error(f"Timeout parsing {filename} after 20 seconds")
 
                 # Try fallback extraction for PDFs
                 file_ext = os.path.splitext(filename)[1].lower()
@@ -239,14 +245,14 @@ async def process_documents_task(audit_id: str, zip_path: str):
                             'filename': filename,
                             'type': 'pdf',
                             'text': '',
-                            'error': f'Timeout after 30s, fallback also failed: {str(fallback_error)}'
+                            'error': f'Timeout after 20s, fallback also failed: {str(fallback_error)}'
                         }
                 else:
                     doc = {
                         'filename': filename,
                         'type': file_ext.lstrip('.'),
                         'text': '',
-                        'error': 'Document parsing timed out after 30 seconds'
+                        'error': 'Document parsing timed out after 20 seconds'
                     }
             except Exception as e:
                 logger.error(f"Error parsing {filename}: {e}")
@@ -270,8 +276,8 @@ async def process_documents_task(audit_id: str, zip_path: str):
 
         logger.info(f"Parsed {len(documents)} documents for audit {audit_id}")
 
-        # Run AI processing pipeline
-        await processing.process_audit(audit_id, documents)
+        # Run AI processing pipeline (async function called from sync context)
+        asyncio.run(processing.process_audit(audit_id, documents))
 
         logger.info(f"Successfully completed audit {audit_id}")
 
