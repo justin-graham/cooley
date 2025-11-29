@@ -12,18 +12,24 @@ import uuid
 import shutil
 import tempfile
 import logging
+from datetime import date, datetime
+from decimal import Decimal
+from typing import List, Optional, Dict, Any
+from collections import defaultdict
+from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException
+from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException, Query
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 from dotenv import load_dotenv
 
+# Load environment variables FIRST (before importing app modules that use them)
+load_dotenv('.env.local')  # Load local overrides first
+load_dotenv()  # Load .env as fallback
+
 from app import db, utils, processing
-
-
-# Load environment variables
-load_dotenv()
 
 # Validate required env vars
 if not os.getenv("ANTHROPIC_API_KEY"):
@@ -157,6 +163,234 @@ async def get_status(audit_id: str):
 async def health_check():
     """Simple health check endpoint."""
     return {"status": "healthy", "service": "corporate-audit-api"}
+
+
+# ============================================================================
+# CAP TABLE TIE-OUT ENDPOINTS
+# ============================================================================
+
+# Pydantic models for type-safe responses
+class EquityEvent(BaseModel):
+    """Model for a single equity transaction event."""
+    id: str
+    event_date: date
+    event_type: str
+    shareholder_name: Optional[str]
+    share_class: Optional[str]
+    share_delta: float
+    source_doc_id: Optional[str]
+    source_snippet: Optional[str]
+    approval_doc_id: Optional[str]
+    approval_snippet: Optional[str]
+    compliance_status: str
+    compliance_note: Optional[str]
+    details: Dict[str, Any]
+
+
+class CapTableRow(BaseModel):
+    """Model for a single row in the cap table."""
+    shareholder: str
+    share_class: str
+    shares: float
+    ownership_pct: float
+    compliance_issues: List[str]
+
+
+class CapTableState(BaseModel):
+    """Model for the full cap table at a point in time."""
+    as_of_date: date
+    total_shares: float
+    shareholders: List[CapTableRow]
+
+
+@app.get("/api/audits/{audit_id}/events", response_model=List[EquityEvent])
+async def get_equity_events(audit_id: str):
+    """
+    Fetch all equity events for an audit (for time-travel cap table).
+    Called once when the audit view loads.
+
+    Args:
+        audit_id: UUID of the audit
+
+    Returns:
+        List of equity events ordered by date
+    """
+    try:
+        # Check if audit exists
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        # Fetch equity events
+        events = db.get_equity_events_by_audit(audit_id)
+
+        # Convert UUIDs to strings and dates to ISO format
+        for event in events:
+            event['id'] = str(event['id'])
+            if event.get('source_doc_id'):
+                event['source_doc_id'] = str(event['source_doc_id'])
+            if event.get('approval_doc_id'):
+                event['approval_doc_id'] = str(event['approval_doc_id'])
+
+        return events
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch events: {str(e)}")
+
+
+@app.get("/api/audits/{audit_id}/captable", response_model=CapTableState)
+async def get_cap_table_at_time(
+    audit_id: str,
+    as_of_date: Optional[str] = Query(None, description="ISO date string (YYYY-MM-DD), defaults to today")
+):
+    """
+    Calculate cap table at a specific point in time (time-travel feature).
+    Called repeatedly as user moves the time slider.
+
+    Args:
+        audit_id: UUID of the audit
+        as_of_date: Optional ISO date string (YYYY-MM-DD). If None, uses today's date.
+
+    Returns:
+        Cap table state with shareholders and ownership percentages
+    """
+    try:
+        # Check if audit exists
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        # Parse date filter
+        if as_of_date:
+            try:
+                cutoff_date = datetime.fromisoformat(as_of_date).date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        else:
+            cutoff_date = date.today()
+
+        # Get cached events (or fetch from DB)
+        events = _get_cached_equity_events(audit_id)
+
+        if not events:
+            # No events found - return empty cap table
+            return CapTableState(
+                as_of_date=cutoff_date,
+                total_shares=0,
+                shareholders=[]
+            )
+
+        # Filter events by date
+        filtered_events = [
+            e for e in events
+            if e['event_date'] <= cutoff_date
+        ]
+
+        # Aggregate in Python (simple dict-based aggregation)
+        # Key: (shareholder, share_class) -> shares
+        cap_table_dict = defaultdict(lambda: defaultdict(float))
+        issues_by_shareholder = defaultdict(list)
+
+        for event in filtered_events:
+            shareholder = event.get('shareholder_name')
+            if not shareholder:
+                continue  # Skip formation events and other non-equity events
+
+            share_class = event.get('share_class') or 'Common Stock'
+            delta = float(event.get('share_delta', 0))  # Convert Decimal to float (safety measure)
+
+            cap_table_dict[shareholder][share_class] += delta
+
+            # Collect compliance issues
+            if event.get('compliance_status') in ['WARNING', 'CRITICAL']:
+                note = event.get('compliance_note')
+                if note and note not in issues_by_shareholder[shareholder]:
+                    issues_by_shareholder[shareholder].append(note)
+
+        # Calculate totals and build response
+        shareholders = []
+        for shareholder, classes in cap_table_dict.items():
+            for share_class, shares in classes.items():
+                if shares > 0:  # Only show active positions (positive shares)
+                    shareholders.append({
+                        'shareholder': shareholder,
+                        'share_class': share_class,
+                        'shares': shares,
+                        'compliance_issues': issues_by_shareholder.get(shareholder, [])
+                    })
+
+        # Calculate total shares
+        total_shares = float(sum(sh['shares'] for sh in shareholders))
+
+        # Calculate ownership percentages
+        for sh in shareholders:
+            sh['ownership_pct'] = round((float(sh['shares']) / total_shares * 100), 2) if total_shares > 0 else 0.0
+
+        # Sort by ownership descending
+        shareholders.sort(key=lambda x: x['shares'], reverse=True)
+
+        return CapTableState(
+            as_of_date=cutoff_date,
+            total_shares=total_shares,
+            shareholders=[CapTableRow(**sh) for sh in shareholders]
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to calculate cap table: {str(e)}")
+
+
+@lru_cache(maxsize=128)
+def _get_cached_equity_events(audit_id: str) -> List[Dict[str, Any]]:
+    """
+    Cache equity events in memory to avoid repeated DB queries.
+    LRU cache automatically evicts old entries when full.
+
+    Args:
+        audit_id: UUID of the audit
+
+    Returns:
+        List of equity events
+    """
+    return db.get_equity_events_by_audit(audit_id)
+
+
+@app.get("/api/audits/{audit_id}/documents/{doc_id}")
+async def get_document(audit_id: str, doc_id: str):
+    """
+    Fetch a single document by ID (for document viewer modal).
+
+    Args:
+        audit_id: UUID of the audit (for validation)
+        doc_id: UUID of the document
+
+    Returns:
+        Document data including full text and extracted data
+    """
+    try:
+        # Fetch document
+        document = db.get_document_by_id(doc_id)
+
+        if not document:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+        # Verify document belongs to this audit
+        if str(document['audit_id']) != audit_id:
+            raise HTTPException(status_code=403, detail="Document does not belong to this audit")
+
+        # Convert UUID to string for JSON serialization
+        document['id'] = str(document['id'])
+        document['audit_id'] = str(document['audit_id'])
+
+        return document
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch document: {str(e)}")
 
 
 # ============================================================================

@@ -40,34 +40,39 @@
         <!-- Company Header (rendered dynamically) -->
         <div class="company-header"></div>
 
-        <!-- Document Categories -->
-        <div class="section">
-            <h2>Document Inventory</h2>
-            <div id="documents-content"></div>
+        <!-- Horizontal Interactive Timeline -->
+        <div style="margin-bottom: 48px;">
+            <div id="horizontal-timeline"></div>
+            <div id="timeline-date-display" class="timeline-date-display"></div>
         </div>
 
-        <!-- Timeline -->
-        <div class="grid">
-            <div class="col-6">
-                <div class="section">
-                    <h2>Corporate Timeline</h2>
-                    <div id="timeline-content"></div>
-                </div>
+        <!-- Split Panel Layout: Cap Table + Event Stream -->
+        <div class="split-view">
+            <!-- Left Panel: Cap Table -->
+            <div class="panel-left">
+                <h2>Cap Table</h2>
+                <div id="cap-table-container"></div>
             </div>
 
-            <!-- Cap Table -->
-            <div class="col-6">
-                <div class="section">
-                    <h2>Capitalization Table (Draft)</h2>
-                    <div id="cap-table-content"></div>
-                </div>
+            <!-- Right Panel: Event Stream -->
+            <div class="panel-right">
+                <h2>Document Stream</h2>
+                <div id="event-stream-container"></div>
             </div>
         </div>
 
-        <!-- Issues Tracker -->
-        <div class="section">
-            <h2>Issues & Recommendations</h2>
-            <div id="issues-content"></div>
+        <!-- Collapsible Tabs: Documents & Issues -->
+        <div class="reference-tabs">
+            <div class="tab-header">
+                <button class="tab-btn active" data-tab="documents">Documents <span id="doc-count"></span></button>
+                <button class="tab-btn" data-tab="issues">Issues <span id="issue-count"></span></button>
+            </div>
+            <div class="tab-content" id="documents-tab">
+                <div id="documents-content"></div>
+            </div>
+            <div class="tab-content hidden" id="issues-tab">
+                <div id="issues-content"></div>
+            </div>
         </div>
 
         <!-- Failed Documents (if any) -->
@@ -86,6 +91,21 @@
             Tieout v1.0 | Jake Sortor
         </p>
     </footer>
+
+    <!-- Document Viewer Modal -->
+    <div id="document-modal" class="modal" style="display: none;">
+        <div class="modal-backdrop"></div>
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3 id="modal-filename" class="modal-title"></h3>
+                <button class="modal-close" aria-label="Close modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-classification" class="modal-classification"></div>
+                <div id="modal-content" class="modal-content-text"></div>
+            </div>
+        </div>
+    </div>
 
     <!-- JavaScript -->
     <script src="/static/script.js"></script>

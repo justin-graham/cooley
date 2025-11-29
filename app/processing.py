@@ -10,6 +10,7 @@ import os
 import json
 import logging
 import time
+from decimal import Decimal
 from typing import List, Dict, Any
 from anthropic import Anthropic, APITimeoutError, APIError, RateLimitError
 from app import db, prompts
@@ -148,7 +149,9 @@ def call_claude(prompt: str, max_tokens: int = 2048) -> str:
 
 def parse_json_response(response_text: str) -> Any:
     """
-    Parse JSON from Claude's response, handling potential markdown wrapping.
+    Parse JSON from Claude's response with robust error handling.
+
+    Handles markdown wrapping, explanatory text, truncation, and repairs common JSON errors.
 
     Args:
         response_text: Raw response from Claude
@@ -156,16 +159,52 @@ def parse_json_response(response_text: str) -> Any:
     Returns:
         Parsed JSON object (dict or list)
     """
-    # Remove markdown code block formatting if present
-    text = response_text.strip()
-    if text.startswith("```json"):
-        text = text[7:]  # Remove ```json
-    if text.startswith("```"):
-        text = text[3:]  # Remove ```
-    if text.endswith("```"):
-        text = text[:-3]  # Remove closing ```
+    import re
 
-    return json.loads(text.strip())
+    text = response_text.strip()
+
+    # Remove markdown code block formatting if present
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+
+    # Extract JSON from surrounding text (look for [ or { to } or ])
+    json_match = re.search(r'(\[.*\]|\{.*\})', text, re.DOTALL)
+    if json_match:
+        text = json_match.group(1)
+
+    # Attempt 1: Standard parsing
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError as e:
+        logger.warning(f"Initial JSON parse failed at line {e.lineno} col {e.colno}: {e.msg}. Attempting repair...")
+
+        # Attempt 2: Fix trailing commas (common Claude mistake)
+        try:
+            repaired = re.sub(r',(\s*[\]}])', r'\1', text)
+            result = json.loads(repaired)
+            logger.info("JSON repaired successfully (removed trailing commas)")
+            return result
+        except json.JSONDecodeError:
+            pass
+
+        # Attempt 3: Extract valid JSON prefix (for truncated responses)
+        try:
+            decoder = json.JSONDecoder()
+            result, idx = decoder.raw_decode(text)
+            logger.warning(f"Recovered partial JSON: parsed {idx}/{len(text)} characters")
+            return result
+        except json.JSONDecodeError:
+            pass
+
+        # Log failure details and re-raise
+        logger.error(f"JSON repair failed. Error: {e}")
+        logger.error(f"Problematic section: {text[max(0, e.pos-50):e.pos+50]}")
+        raise
 
 
 # ============================================================================
@@ -629,25 +668,25 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
 
         key = (shareholder, share_class)
         if key not in aggregated:
-            aggregated[key] = 0
+            aggregated[key] = 0.0  # Initialize as float
 
         # Add shares (handles positive issuances)
-        if isinstance(shares, (int, float)):
-            aggregated[key] += shares
+        if isinstance(shares, (int, float, Decimal)):
+            aggregated[key] += float(shares)  # Convert to float
 
     # Remove entries with 0 or negative shares
     aggregated = {k: v for k, v in aggregated.items() if v > 0}
 
     # Calculate total shares for ownership percentage
-    total_shares = sum(aggregated.values())
+    total_shares = float(sum(aggregated.values()))
 
     # Convert to cap table format with ownership %
     cap_table = [
         {
             'shareholder': shareholder,
-            'shares': shares,
+            'shares': float(shares),  # Ensure float
             'share_class': share_class,
-            'ownership_pct': round((shares / total_shares * 100), 2) if total_shares > 0 else 0.0
+            'ownership_pct': round((float(shares) / total_shares * 100), 2) if total_shares > 0 else 0.0
         }
         for (shareholder, share_class), shares in aggregated.items()
     ]
@@ -657,7 +696,7 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
 
     # Adjust last entry to ensure total = exactly 100.00%
     if cap_table:
-        calculated_total = sum(entry['ownership_pct'] for entry in cap_table)
+        calculated_total = float(sum(entry['ownership_pct'] for entry in cap_table))
         if calculated_total != 100.0:
             adjustment = round(100.0 - calculated_total, 2)
             cap_table[-1]['ownership_pct'] = round(cap_table[-1]['ownership_pct'] + adjustment, 2)
@@ -717,7 +756,7 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
                         item for item in equity_data
                         if (item.get('shareholder') == shareholder and
                             item.get('shares') and
-                            isinstance(item.get('shares'), (int, float)) and
+                            isinstance(item.get('shares'), (int, float, Decimal)) and
                             item.get('shares') > 0)
                     ]
 
@@ -729,14 +768,14 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
                         logger.warning(f"Could not infer repurchase shares for {shareholder} - no matching issuances found")
 
                 # Add repurchase with negative shares to subtract from cap table
-                if shares and isinstance(shares, (int, float)):
+                if shares and isinstance(shares, (int, float, Decimal)):
                     equity_data.append({
                         'shareholder': shareholder,
-                        'shares': -abs(shares),  # Make negative to subtract
+                        'shares': -float(abs(shares)),  # Make negative to subtract (convert to float)
                         'share_class': share_class,
                         'date': repurchase.get('date')
                     })
-                    logger.info(f"Added repurchase: {shareholder} -{abs(shares)} shares")
+                    logger.info(f"Added repurchase: {shareholder} -{float(abs(shares))} shares")
 
     if not equity_data:
         return []
@@ -805,7 +844,11 @@ def check_deterministic_issues(documents: List[Dict[str, Any]], cap_table: List[
 
     if authorized_shares and cap_table:
         # Calculate total issued shares from cap table
-        total_issued = sum(entry.get('shares', 0) for entry in cap_table if isinstance(entry.get('shares'), (int, float)))
+        total_issued = sum(
+            float(entry.get('shares', 0))
+            for entry in cap_table
+            if isinstance(entry.get('shares'), (int, float, Decimal))
+        )
 
         if total_issued > authorized_shares:
             issues.append({
@@ -961,6 +1004,232 @@ def extract_company_name(extractions: List[Dict[str, Any]]) -> str:
 
 
 # ============================================================================
+# CAP TABLE TIE-OUT: Transaction Extraction & Approval Matching
+# ============================================================================
+
+TRANSACTABLE_DOC_TYPES = [
+    'Stock Purchase Agreement',
+    'SAFE',
+    'Option Grant Agreement',
+    'Share Repurchase Agreement',
+    'Convertible Note'
+]
+
+APPROVAL_DOC_TYPES = [
+    'Board/Shareholder Minutes',
+    'Charter Document'  # For formation events
+]
+
+
+def extract_equity_transactions(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Extract equity transactions from extracted data and structure for equity_events table.
+    This is Pass 2A: Transaction extraction (atomic, like current MVP).
+
+    Args:
+        extractions: List of documents with extracted data from Pass 2
+
+    Returns:
+        List of transaction dictionaries ready for approval matching
+    """
+    transactions = []
+
+    for doc in extractions:
+        doc_id = doc.get('document_id')  # Set during document insertion
+        filename = doc.get('filename', 'unknown')
+
+        # Stock issuances
+        if 'stock_issuances' in doc:
+            for issuance in doc['stock_issuances']:
+                if issuance.get('date') and issuance.get('shareholder') and issuance.get('shares'):
+                    transactions.append({
+                        'event_date': issuance['date'],
+                        'event_type': 'issuance',
+                        'shareholder_name': issuance['shareholder'],
+                        'share_class': issuance.get('share_class', 'Common Stock'),
+                        'share_delta': abs(issuance['shares']),  # Positive
+                        'source_doc_id': doc_id,
+                        'source_snippet': issuance.get('source_quote', f"{issuance['shareholder']} - {issuance['shares']} shares"),
+                        'details': {
+                            'price_per_share': issuance.get('price_per_share'),
+                            'verification': issuance.get('verification')
+                        }
+                    })
+
+        # SAFEs
+        if 'safe_data' in doc:
+            safe = doc['safe_data']
+            if not safe.get('error') and safe.get('date') and safe.get('investor'):
+                transactions.append({
+                    'event_date': safe['date'],
+                    'event_type': 'safe',
+                    'shareholder_name': safe['investor'],
+                    'share_class': 'SAFE',
+                    'share_delta': 0,  # SAFEs don't have shares yet
+                    'source_doc_id': doc_id,
+                    'source_snippet': safe.get('source_quote', f"SAFE investment by {safe['investor']}"),
+                    'details': {
+                        'amount': safe.get('amount'),
+                        'valuation_cap': safe.get('valuation_cap'),
+                        'discount_rate': safe.get('discount_rate')
+                    }
+                })
+
+        # Option grants
+        if 'option_data' in doc:
+            option = doc['option_data']
+            if not option.get('error') and option.get('grant_date') and option.get('recipient'):
+                transactions.append({
+                    'event_date': option['grant_date'],
+                    'event_type': 'option_grant',
+                    'shareholder_name': option['recipient'],
+                    'share_class': 'Option',
+                    'share_delta': option.get('shares', 0),
+                    'source_doc_id': doc_id,
+                    'source_snippet': option.get('source_quote', f"Option grant to {option['recipient']}"),
+                    'details': {
+                        'strike_price': option.get('strike_price'),
+                        'vesting_schedule': option.get('vesting_schedule')
+                    }
+                })
+
+        # Repurchases (negative delta)
+        if 'repurchase_data' in doc:
+            repurchase = doc['repurchase_data']
+            if not repurchase.get('error') and repurchase.get('date') and repurchase.get('shareholder'):
+                shares = repurchase.get('shares')
+                if shares and isinstance(shares, (int, float, Decimal)):
+                    transactions.append({
+                        'event_date': repurchase['date'],
+                        'event_type': 'repurchase',
+                        'shareholder_name': repurchase['shareholder'],
+                        'share_class': repurchase.get('share_class', 'Common Stock'),
+                        'share_delta': -float(abs(shares)),  # Negative for repurchases (convert to float)
+                        'source_doc_id': doc_id,
+                        'source_snippet': repurchase.get('source_quote', f"Repurchase from {repurchase['shareholder']}"),
+                        'details': {
+                            'price_per_share': repurchase.get('price_per_share')
+                        }
+                    })
+
+        # Formation events from charter
+        if 'charter_data' in doc:
+            charter = doc['charter_data']
+            if not charter.get('error') and charter.get('incorporation_date'):
+                transactions.append({
+                    'event_date': charter['incorporation_date'],
+                    'event_type': 'formation',
+                    'shareholder_name': None,
+                    'share_class': None,
+                    'share_delta': 0,
+                    'source_doc_id': doc_id,
+                    'source_snippet': charter.get('source_quote', f"Company incorporated: {charter.get('company_name')}"),
+                    'details': {
+                        'company_name': charter.get('company_name'),
+                        'authorized_shares': charter.get('authorized_shares'),
+                        'share_classes': charter.get('share_classes')
+                    }
+                })
+
+    logger.info(f"Extracted {len(transactions)} equity transactions from documents")
+    return transactions
+
+
+def match_approvals_batch(transactions: List[Dict[str, Any]], classified_docs: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Match transactions with their approving documents using a single batched Claude call.
+    This is Pass 2B: Context-aware approval matching (batched, efficient).
+
+    Args:
+        transactions: List of transaction dicts from extract_equity_transactions()
+        classified_docs: List of all classified documents (to find approval docs)
+
+    Returns:
+        Transactions with approval_doc_id, approval_snippet, compliance_status filled in
+    """
+    if not transactions:
+        return transactions
+
+    # Filter to approval documents only
+    approval_docs = [
+        d for d in classified_docs
+        if d.get('category') in APPROVAL_DOC_TYPES and d.get('document_id')
+    ]
+
+    if not approval_docs:
+        # No approval documents found - mark all as CRITICAL
+        logger.warning("No approval documents found - marking all transactions as CRITICAL")
+        for tx in transactions:
+            tx['approval_doc_id'] = None
+            tx['approval_snippet'] = None
+            tx['compliance_status'] = 'CRITICAL'
+            tx['compliance_note'] = 'No board approval documents found in document set'
+        return transactions
+
+    # Build manifest for Claude (lightweight, just metadata + excerpt)
+    manifest = []
+    for doc in approval_docs:
+        manifest.append({
+            'doc_id': str(doc['document_id']),
+            'filename': doc.get('filename', 'unknown'),
+            'category': doc.get('category'),
+            'excerpt': doc.get('text', '')[:2000] if doc.get('text') else ''  # First 2K chars
+        })
+
+    # Build transaction summary for Claude
+    tx_summary = []
+    for i, tx in enumerate(transactions):
+        tx_summary.append({
+            'tx_index': i,
+            'event_date': tx['event_date'],
+            'event_type': tx['event_type'],
+            'shareholder': tx.get('shareholder_name'),
+            'shares': tx.get('share_delta'),
+            'snippet': (tx.get('source_snippet') or '')[:500]  # Truncate for API efficiency
+        })
+
+    # Single Claude call for batch approval matching
+    try:
+        prompt = prompts.BATCH_APPROVAL_MATCHING_PROMPT.format(
+            transactions_json=json.dumps(tx_summary, indent=2),
+            approval_docs_json=json.dumps(manifest, indent=2)
+        )
+
+        logger.info(f"Matching {len(transactions)} transactions with {len(approval_docs)} approval documents via batch Claude call...")
+        response = call_claude(prompt, max_tokens=8000)
+        matches = parse_json_response(response)
+
+        # Validate response structure
+        if not isinstance(matches, list):
+            raise ValueError(f"Expected JSON array, got {type(matches).__name__}")
+        if matches and not all('tx_index' in m for m in matches):
+            logger.warning("Some matches missing tx_index field - filtering out invalid entries")
+            matches = [m for m in matches if 'tx_index' in m]
+
+        # Merge results back into transactions
+        for match in matches:
+            tx_idx = match.get('tx_index')
+            if tx_idx is not None and 0 <= tx_idx < len(transactions):
+                transactions[tx_idx]['approval_doc_id'] = match.get('approval_doc_id')
+                transactions[tx_idx]['approval_snippet'] = match.get('approval_quote')
+                transactions[tx_idx]['compliance_status'] = match.get('compliance_status', 'VERIFIED')
+                transactions[tx_idx]['compliance_note'] = match.get('compliance_note')
+
+        logger.info(f"Batch approval matching complete: {len(matches)} matches processed")
+        return transactions
+
+    except Exception as e:
+        logger.error(f"Batch approval matching failed: {e}", exc_info=True)
+        # Fallback: Mark all as PENDING if matching fails
+        for tx in transactions:
+            tx['approval_doc_id'] = None
+            tx['approval_snippet'] = None
+            tx['compliance_status'] = 'WARNING'
+            tx['compliance_note'] = f'Approval matching failed: {str(e)}'
+        return transactions
+
+
+# ============================================================================
 # MAIN ORCHESTRATOR
 # ============================================================================
 
@@ -1005,6 +1274,20 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
             logger.error(f"Failed to update progress: {e}")
             print(f"ERROR: Failed to update progress: {e}")
 
+        # Insert documents into documents table first (for tie-out feature)
+        for doc in classified_docs:
+            try:
+                doc_id = db.insert_document(
+                    audit_id=audit_id,
+                    filename=doc.get('filename', 'unknown'),
+                    classification=doc.get('category'),
+                    extracted_data=None,  # Will update after extraction
+                    full_text=doc.get('text')
+                )
+                doc['document_id'] = doc_id  # Store for reference
+            except Exception as e:
+                logger.warning(f"Failed to insert document {doc.get('filename')}: {e}")
+
         extractions = []
         for i, doc in enumerate(classified_docs, start=1):
             if doc.get('error'):
@@ -1020,6 +1303,26 @@ async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
             extractions.append({**doc, **extracted_data})
 
         logger.info(f"Pass 2 complete: Extracted data from {total_docs} documents")
+
+        # ========== PASS 2 TIE-OUT: Transaction Extraction & Approval Matching ==========
+        try:
+            db.update_progress(audit_id, "Pass 2: Matching transactions with approvals...")
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
+
+        # Extract equity transactions from extracted data
+        transactions = extract_equity_transactions(extractions)
+
+        # Match transactions with approval documents (single batched Claude call)
+        if transactions:
+            transactions = match_approvals_batch(transactions, classified_docs)
+
+            # Insert equity events into database
+            try:
+                db.insert_equity_events(audit_id, transactions)
+                logger.info(f"Inserted {len(transactions)} equity events into database")
+            except Exception as e:
+                logger.error(f"Failed to insert equity events: {e}", exc_info=True)
 
         # ========== PASS 3: SYNTHESIS ==========
         try:

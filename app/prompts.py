@@ -347,6 +347,75 @@ Respond ONLY with valid JSON (array of issues):
 
 
 # ============================================================================
+# CAP TABLE TIE-OUT: Batch Approval Matching
+# ============================================================================
+
+BATCH_APPROVAL_MATCHING_PROMPT = """You are a corporate attorney matching equity transactions to their board approval documents.
+
+TRANSACTIONS TO VERIFY:
+---
+{transactions_json}
+---
+
+APPROVAL DOCUMENTS AVAILABLE:
+---
+{approval_docs_json}
+---
+
+TASK:
+For EACH transaction in the list, identify:
+1. The approval_doc_id from the manifest that authorizes this transaction (if any)
+2. A specific quote from that approval document proving the approval
+3. Compliance status based on these rules:
+   - VERIFIED: Approval found with date on or before transaction date
+   - WARNING: Approval found but date inconsistency (approval after transaction, or vague wording)
+   - CRITICAL: No approval found, or approval clearly insufficient
+4. Brief compliance_note explaining your determination
+
+MATCHING GUIDELINES:
+- Board Minutes/Consents that say "approve issuance of X shares to Y" match stock issuances
+- Board Minutes discussing "equity incentive plan" match option grants
+- Formation transactions (incorporations) are self-authorizing via Charter Document
+- If transaction date is BEFORE approval date, that's a WARNING (backdated approval concern)
+- If no approval document mentions the transaction at all, that's CRITICAL
+
+RESPONSE FORMAT:
+Return a JSON array with one entry per transaction. Each entry must have:
+- tx_index: integer (from input transactions list)
+- approval_doc_id: string UUID or null
+- approval_quote: string or null (exact text from approval document)
+- compliance_status: "VERIFIED", "WARNING", or "CRITICAL"
+- compliance_note: string explaining the status
+
+EXAMPLE OUTPUT:
+[
+  {{
+    "tx_index": 0,
+    "approval_doc_id": "abc-123-uuid",
+    "approval_quote": "RESOLVED: to approve the issuance of 1,000,000 shares of Common Stock to John Doe...",
+    "compliance_status": "VERIFIED",
+    "compliance_note": "Transaction approved by board consent dated 2021-02-28 (before issuance date 2021-03-01)"
+  }},
+  {{
+    "tx_index": 1,
+    "approval_doc_id": null,
+    "approval_quote": null,
+    "compliance_status": "CRITICAL",
+    "compliance_note": "No board approval found for this option grant. Options should be approved by board under equity incentive plan."
+  }}
+]
+
+CRITICAL FORMATTING REQUIREMENTS:
+1. Output ONLY the JSON array - no explanatory text before or after
+2. Escape all quotes within string values using backslash: \\"
+3. NO trailing commas before ] or }}
+4. Keep approval_quote field under 400 characters to avoid truncation
+5. Use null for missing values (not empty strings)
+
+Respond ONLY with valid JSON array matching this format:"""
+
+
+# ============================================================================
 # HELPER: COMPANY NAME EXTRACTION
 # ============================================================================
 

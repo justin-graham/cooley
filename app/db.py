@@ -7,6 +7,7 @@ import os
 import json
 import logging
 import psycopg2
+from decimal import Decimal
 from psycopg2.extras import Json, RealDictCursor
 from typing import Optional, Dict, Any
 
@@ -156,6 +157,185 @@ def get_audit(audit_id: str) -> Optional[Dict[str, Any]]:
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM audits WHERE id = %s", (audit_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# CRUD Operations for Cap Table Tie-Out Feature
+# ============================================================================
+
+def insert_document(audit_id: str, filename: str, classification: Optional[str] = None,
+                    extracted_data: Optional[Dict] = None, full_text: Optional[str] = None) -> str:
+    """
+    Insert a document record and return its UUID.
+
+    Args:
+        audit_id: UUID of the parent audit
+        filename: Original filename
+        classification: Document type (e.g., 'Stock Purchase Agreement')
+        extracted_data: Structured data from Pass 2
+        full_text: Parsed document text
+
+    Returns:
+        UUID string of the created document
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO documents (audit_id, filename, classification, extracted_data, full_text)
+                VALUES (%s, %s, %s, %s, %s)
+                RETURNING id
+                """,
+                (audit_id, filename, classification, Json(extracted_data) if extracted_data else None, full_text)
+            )
+            doc_id = cur.fetchone()[0]
+        conn.commit()
+        return str(doc_id)
+    finally:
+        conn.close()
+
+
+def get_documents_by_audit(audit_id: str) -> list[Dict[str, Any]]:
+    """
+    Retrieve all documents for an audit.
+
+    Args:
+        audit_id: UUID of the audit
+
+    Returns:
+        List of document dictionaries
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT * FROM documents WHERE audit_id = %s ORDER BY created_at",
+                (audit_id,)
+            )
+            return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def insert_equity_events(audit_id: str, events: list[Dict[str, Any]]) -> None:
+    """
+    Bulk insert equity events for an audit.
+
+    Args:
+        audit_id: UUID of the audit
+        events: List of event dictionaries with keys:
+            - event_date: date
+            - event_type: str
+            - shareholder_name: str (optional)
+            - share_class: str (optional)
+            - share_delta: float
+            - source_doc_id: str (UUID)
+            - source_snippet: str (optional)
+            - approval_doc_id: str (UUID, optional)
+            - approval_snippet: str (optional)
+            - compliance_status: str ('VERIFIED', 'WARNING', 'CRITICAL')
+            - compliance_note: str (optional)
+            - details: dict (optional)
+    """
+    if not events:
+        return
+
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            for event in events:
+                cur.execute(
+                    """
+                    INSERT INTO equity_events (
+                        audit_id, event_date, event_type, shareholder_name, share_class, share_delta,
+                        source_doc_id, source_snippet, approval_doc_id, approval_snippet,
+                        compliance_status, compliance_note, details
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        audit_id,
+                        event['event_date'],
+                        event['event_type'],
+                        event.get('shareholder_name'),
+                        event.get('share_class'),
+                        event['share_delta'],
+                        event.get('source_doc_id'),
+                        event.get('source_snippet'),
+                        event.get('approval_doc_id'),
+                        event.get('approval_snippet'),
+                        event.get('compliance_status', 'VERIFIED'),
+                        event.get('compliance_note'),
+                        Json(event.get('details', {}))
+                    )
+                )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def get_equity_events_by_audit(audit_id: str) -> list[Dict[str, Any]]:
+    """
+    Retrieve all equity events for an audit, ordered by date.
+
+    Args:
+        audit_id: UUID of the audit
+
+    Returns:
+        List of equity event dictionaries
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, event_date, event_type, shareholder_name, share_class, share_delta,
+                       source_doc_id, source_snippet, approval_doc_id, approval_snippet,
+                       compliance_status, compliance_note, details
+                FROM equity_events
+                WHERE audit_id = %s
+                ORDER BY event_date ASC, created_at ASC
+                """,
+                (audit_id,)
+            )
+            # Convert Decimal to float for arithmetic compatibility
+            rows = cur.fetchall()
+            return [
+                {
+                    **dict(row),
+                    'share_delta': float(row['share_delta']) if row['share_delta'] is not None else 0.0
+                }
+                for row in rows
+            ]
+    finally:
+        conn.close()
+
+
+def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve a single document by its ID.
+
+    Args:
+        doc_id: UUID of the document
+
+    Returns:
+        Dictionary with document data, or None if not found
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT id, audit_id, filename, classification, extracted_data, full_text, created_at
+                FROM documents
+                WHERE id = %s
+                """,
+                (doc_id,)
+            )
             row = cur.fetchone()
             return dict(row) if row else None
     finally:
