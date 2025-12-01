@@ -6,6 +6,8 @@
 // State
 let currentAuditId = null;
 let pollInterval = null;
+let isDemoModeActive = false;  // Track if currently in demo mode
+let demoDataCache = null;      // Cache demo data for client-side rendering
 
 // DOM Elements
 const uploadZone = document.getElementById('upload-zone');
@@ -45,6 +47,159 @@ function getProgressStep(message) {
 
     return 'Processing';
 }
+
+// ============================================================================
+// DEMO MODE
+// ============================================================================
+
+/**
+ * Load and display demo data without requiring file upload
+ */
+async function loadDemoMode() {
+    try {
+        // Show progress section
+        uploadSection.style.display = 'none';
+        progressSection.style.display = 'flex';
+        progressStep.textContent = 'Loading Demo';
+        progressText.textContent = 'Loading demo audit data...';
+
+        // Fetch demo data
+        const response = await fetch('/static/demo-data.json');
+        if (!response.ok) {
+            throw new Error('Failed to load demo data');
+        }
+
+        const demoData = await response.json();
+
+        // Set demo mode flags and cache data
+        isDemoModeActive = true;
+        demoDataCache = demoData;
+        currentAuditId = demoData.id;
+        console.log('[DEMO] Flags set:', { isDemoModeActive, hasDemoData: !!demoDataCache, auditId: currentAuditId });
+
+        // Simulate a brief loading delay for realism
+        await new Promise(resolve => setTimeout(resolve, 1000));
+
+        // Hide progress and show results
+        progressSection.style.display = 'none';
+        await renderResults(demoData);
+
+    } catch (error) {
+        console.error('Demo mode error:', error);
+        progressText.textContent = `Error loading demo: ${error.message}`;
+        setTimeout(() => {
+            progressSection.style.display = 'none';
+            uploadSection.style.display = 'block';
+        }, 3000);
+    }
+}
+
+/**
+ * Convert demo timeline to EquityEvent format for time-travel feature
+ */
+function convertDemoTimelineToEvents(timeline, documents) {
+    console.log('[CONVERT] Timeline events:', timeline?.length || 0);
+    if (!timeline || !Array.isArray(timeline)) return [];
+
+    return timeline.map((event, index) => {
+        // Extract shareholder name from description if present
+        let shareholderName = null;
+        let shareClass = null;
+        let shareDelta = 0;
+
+        // Try to extract from event description
+        const descMatch = event.description.match(/([\w\s]+)\s+(purchased|granted|received|repurchased)/i);
+        if (descMatch) {
+            shareholderName = descMatch[1].trim();
+        }
+
+        // Determine event type and share delta from description
+        let eventType = 'formation';
+        if (event.description.includes('purchased') || event.description.includes('Financing')) {
+            eventType = 'issuance';
+            const sharesMatch = event.description.match(/([\d,]+)\s+(common|preferred|shares)/i);
+            if (sharesMatch) {
+                shareDelta = parseInt(sharesMatch[1].replace(/,/g, ''));
+                shareClass = sharesMatch[2];
+            }
+        } else if (event.description.includes('granted')) {
+            eventType = 'option_grant';
+            const sharesMatch = event.description.match(/([\d,]+)\s+/);
+            if (sharesMatch) {
+                shareDelta = parseInt(sharesMatch[1].replace(/,/g, ''));
+                shareClass = 'Option';
+            }
+        } else if (event.description.includes('repurchased')) {
+            eventType = 'repurchase';
+            const sharesMatch = event.description.match(/([\d,]+)\s+shares/i);
+            if (sharesMatch) {
+                shareDelta = -parseInt(sharesMatch[1].replace(/,/g, ''));
+            }
+        }
+
+        return {
+            id: `demo-event-${index}`,
+            audit_id: 999,
+            event_date: event.date,
+            event_type: eventType,
+            shareholder_name: shareholderName,
+            share_class: shareClass || 'Common',
+            share_delta: shareDelta,
+            source_snippet: event.description,
+            approval_snippet: null,
+            compliance_status: 'VERIFIED',
+            compliance_note: null,
+            source_doc_id: event.source_documents ? event.source_documents[0] : null,
+            approval_doc_id: null,
+            details: {}
+        };
+    });
+}
+
+/**
+ * Convert demo cap_table to CapTableState format
+ */
+function convertDemoCapTable(capTable, asOfDate) {
+    if (!capTable || typeof capTable !== 'object') {
+        return { shareholders: [], total_shares: 0, as_of_date: asOfDate };
+    }
+
+    const shareholders = Object.entries(capTable).map(([name, data]) => ({
+        shareholder: name,
+        share_class: data.share_type || 'Common',
+        shares: data.shares || 0,
+        ownership_pct: data.ownership_percent || 0,
+        compliance_issues: []
+    }));
+
+    const totalShares = shareholders.reduce((sum, sh) => sum + sh.shares, 0);
+
+    return {
+        shareholders,
+        total_shares: totalShares,
+        as_of_date: asOfDate
+    };
+}
+
+/**
+ * Check if we're in demo mode (via URL parameter)
+ */
+function isDemoMode() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('demo') === 'true';
+}
+
+/**
+ * Initialize demo mode if URL parameter is present
+ */
+function initDemoModeIfNeeded() {
+    if (isDemoMode()) {
+        loadDemoMode();
+    }
+}
+
+// Check for demo mode on page load
+document.addEventListener('DOMContentLoaded', initDemoModeIfNeeded);
 
 // ============================================================================
 // UPLOAD HANDLING
@@ -202,15 +357,17 @@ async function checkStatus() {
  * Render complete audit results
  */
 async function renderResults(results) {
+    // Hide upload page elements
+    document.getElementById('upload-header').style.display = 'none';
+
     // Show results section
     resultsSection.style.display = 'block';
 
-    // Render terminal-style company header
+    // Render two-column hero header
     renderCompanyHeader(results);
 
-    // Update tab counts
-    document.getElementById('doc-count').textContent = `(${results.documents ? results.documents.length : 0})`;
-    document.getElementById('issue-count').textContent = `(${results.issues ? results.issues.length : 0})`;
+    // Render features grid with document type cards
+    renderFeaturesGrid(results.documents);
 
     // Render documents in tab
     renderDocuments(results.documents);
@@ -223,49 +380,99 @@ async function renderResults(results) {
         renderFailedDocuments(results.failed_documents);
     }
 
-    // Initialize time-travel view
-    await initTimeTravel(currentAuditId);
+    // Initialize time-travel view with error handling
+    try {
+        await initTimeTravel(currentAuditId);
+    } catch (error) {
+        console.error('Failed to initialize time-travel view:', error);
+        // Show a user-friendly error message
+        document.getElementById('cap-table-container').innerHTML =
+            '<p style="color: var(--accent); padding: 1rem;">Unable to load cap table. Please refresh the page.</p>';
+        document.getElementById('event-stream-container').innerHTML =
+            '<p style="color: var(--accent); padding: 1rem;">Unable to load event stream. Please refresh the page.</p>';
+    }
 
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: 'smooth' });
 }
 
 /**
- * Render user-friendly company header with graphic and stats
+ * Render user-friendly company header with graphic and stats in two-column hero layout
  */
 function renderCompanyHeader(results) {
-    const container = document.querySelector('.company-header');
+    const leftContainer = document.querySelector('.hero-left .company-header-content');
+    const rightContainer = document.querySelector('.hero-right .hero-visual');
 
     // Calculate stats
     const docCount = results.documents ? results.documents.length : 0;
     const timeline = results.timeline || [];
     const dates = timeline.map(e => e.date).filter(d => d).sort();
-    const firstDate = dates.length > 0 ? dates[0] : 'N/A';
-    const lastDate = dates.length > 1 ? dates[dates.length - 1] : '';
+
+    // Format dates as MMM DD, YYYY
+    const formatDate = (dateStr) => {
+        if (!dateStr || dateStr === 'N/A') return 'N/A';
+        return new Date(dateStr).toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
+        });
+    };
+
+    const firstDate = dates.length > 0 ? formatDate(dates[0]) : 'N/A';
+    const lastDate = dates.length > 1 ? formatDate(dates[dates.length - 1]) : '';
     const dateRange = lastDate ? `${firstDate} - ${lastDate}` : firstDate;
 
-    const html = `
-        <img src="/static/stripe.png" alt="Company graphic" class="company-header-graphic">
-        <div class="company-header-content">
-            <h1 class="company-name">${results.company_name || 'Unknown Company'}</h1>
-            <div class="company-stats">
-                <div class="company-stat">
-                    <span class="company-stat-label">Documents</span>
-                    <span class="company-stat-value">${docCount}</span>
+    // Render left column: Company info and stats
+    const leftHTML = `
+        <h1 class="company-name">${results.company_name || 'Unknown Company'}</h1>
+        <div class="company-stats">
+            <div class="company-stat">
+                <span class="company-stat-label">Documents</span>
+                <span class="company-stat-value">${docCount}</span>
+            </div>
+            <div class="company-stat">
+                <span class="company-stat-label">Events</span>
+                <span class="company-stat-value">${timeline.length}</span>
+            </div>
+            <div class="company-stat">
+                <span class="company-stat-label">Period</span>
+                <span class="company-stat-value">${dateRange}</span>
+            </div>
+        </div>
+    `;
+
+    // Render right column: Animated canvas visual
+    const rightHTML = `
+        <div class="fig-window">
+            <div class="fig-header">
+                <div class="fig-header-left">
+                    <span>&gt;_</span>
                 </div>
-                <div class="company-stat">
-                    <span class="company-stat-label">Events</span>
-                    <span class="company-stat-value">${timeline.length}</span>
+                <div class="fig-header-center">
+                    [ Tieout ]
                 </div>
-                <div class="company-stat">
-                    <span class="company-stat-label">Period</span>
-                    <span class="company-stat-value">${dateRange}</span>
+                <div class="fig-header-right">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <line x1="4" y1="7" x2="20" y2="7" stroke-width="1.4" />
+                        <circle cx="10" cy="7" r="1.8" stroke-width="1.2" fill="none" />
+                        <line x1="4" y1="17" x2="20" y2="17" stroke-width="1.4" />
+                        <circle cx="14" cy="17" r="1.8" stroke-width="1.2" fill="none" />
+                    </svg>
+                </div>
+            </div>
+            <div class="fig-inner">
+                <div class="fig-canvas-wrap" id="companyHeaderCanvas">
+                    <canvas id="fig84Canvas"></canvas>
                 </div>
             </div>
         </div>
     `;
 
-    container.innerHTML = html;
+    leftContainer.innerHTML = leftHTML;
+    rightContainer.innerHTML = rightHTML;
+
+    // Initialize canvas animation
+    initCompanyHeaderAnimation();
 }
 
 /**
@@ -302,6 +509,39 @@ function renderDocuments(documents) {
     html += '</div>';
 
     container.innerHTML = html;
+}
+
+/**
+ * Render features grid with document type cards
+ */
+function renderFeaturesGrid(documents) {
+    const container = document.getElementById('features-grid');
+
+    // Group documents by classification
+    const typeGroups = documents.reduce((acc, doc) => {
+        const type = doc.classification || 'Other';
+        if (!acc[type]) {
+            acc[type] = { count: 0, docs: [] };
+        }
+        acc[type].count++;
+        acc[type].docs.push(doc);
+        return acc;
+    }, {});
+
+    // Sort by count (descending) and take top 6
+    const topTypes = Object.entries(typeGroups)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 6);
+
+    // Render cards
+    const html = topTypes.map(([type, data]) => `
+        <div class="feature-card">
+            <h3>${type}</h3>
+            <p>${data.count} document${data.count !== 1 ? 's' : ''} classified</p>
+        </div>
+    `).join('');
+
+    container.innerHTML = html || '<p style="text-align: center; color: var(--text-secondary);">No documents to display</p>';
 }
 
 /**
@@ -529,12 +769,27 @@ async function initTimeTravel(auditId) {
     AuditViewState.auditId = auditId;
 
     try {
-        // Fetch all events once
-        const response = await fetch(`/api/audits/${auditId}/events`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch events: ${response.statusText}`);
+        console.log('[INIT TIMETRAVEL] Checking demo mode:', {
+            isDemoModeActive,
+            hasDemoData: !!demoDataCache,
+            willUseDemoData: isDemoModeActive && !!demoDataCache
+        });
+
+        // Demo mode: Use cached data instead of API calls
+        if (isDemoModeActive && demoDataCache) {
+            // Convert demo timeline to EquityEvent format
+            AuditViewState.allEvents = convertDemoTimelineToEvents(
+                demoDataCache.timeline,
+                demoDataCache.documents
+            );
+        } else {
+            // Production mode: Fetch from API
+            const response = await fetch(`/api/audits/${auditId}/events`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch events: ${response.statusText}`);
+            }
+            AuditViewState.allEvents = await response.json();
         }
-        AuditViewState.allEvents = await response.json();
 
         if (AuditViewState.allEvents.length === 0) {
             // No events found - show empty state
@@ -599,7 +854,7 @@ function renderHorizontalTimeline() {
                     <div class="timeline-node-wrapper" style="left: ${positionPercent}%;" data-event-id="${event.id}">
                         <div class="timeline-node" style="background-color: ${color};" title="${event.event_type}: ${event.shareholder_name || 'Company'} - ${new Date(event.event_date).toLocaleDateString()}"></div>
                         ${index % 3 === 0 || index === 0 || index === events.length - 1 ?
-                            `<div class="timeline-date-label">${new Date(event.event_date).toLocaleDateString('en-US', {month: 'short', year: 'numeric'})}</div>`
+                            `<div class="timeline-date-label">${new Date(event.event_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</div>`
                             : ''}
                     </div>
                 `;
@@ -673,12 +928,24 @@ async function renderCapTable() {
     const dateStr = new Date(AuditViewState.currentDate).toISOString().split('T')[0];
 
     try {
-        const response = await fetch(`/api/audits/${AuditViewState.auditId}/captable?as_of_date=${dateStr}`);
-        if (!response.ok) {
-            throw new Error(`API error: ${response.statusText}`);
-        }
+        let newCapTable;
 
-        const newCapTable = await response.json();
+        console.log('[RENDER CAP TABLE] Checking demo mode:', {
+            isDemoModeActive,
+            hasDemoData: !!demoDataCache
+        });
+
+        // Demo mode: Use cached cap table data
+        if (isDemoModeActive && demoDataCache) {
+            newCapTable = convertDemoCapTable(demoDataCache.cap_table, dateStr);
+        } else {
+            // Production mode: Fetch from API
+            const response = await fetch(`/api/audits/${AuditViewState.auditId}/captable?as_of_date=${dateStr}`);
+            if (!response.ok) {
+                throw new Error(`API error: ${response.statusText}`);
+            }
+            newCapTable = await response.json();
+        }
 
         // Detect changed shareholders
         const changedShareholders = new Set();
@@ -740,7 +1007,7 @@ async function renderCapTable() {
 
             row.innerHTML = `
                 <td>
-                    ${sh.shareholder}
+                    <span style="color: ${color}; font-weight: 600;">${sh.shareholder}</span>
                     ${sh.compliance_issues.length > 0 ?
                         `<span style="color: var(--accent); font-size: 0.625rem; margin-left: 4px;" title="${sh.compliance_issues.join('; ')}">⚠</span>`
                         : ''}
@@ -999,13 +1266,37 @@ async function showDocumentModal(auditId, docId, snippetToHighlight = null) {
     modalContent.innerHTML = '<div style="text-align: center; padding: 2rem;">Loading document...</div>';
 
     try {
-        // Fetch document
-        const response = await fetch(`/api/audits/${auditId}/documents/${docId}`);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch document: ${response.statusText}`);
-        }
+        let doc;
 
-        const doc = await response.json();
+        // Demo mode: Find document in cached data
+        if (isDemoModeActive && demoDataCache) {
+            // Find document by filename (docId in demo is often a filename)
+            doc = demoDataCache.documents.find(d =>
+                d.filename === docId ||
+                d.filename.includes(docId) ||
+                docId.includes(d.filename)
+            );
+
+            if (!doc) {
+                throw new Error('Document not found in demo data');
+            }
+
+            // Add mock full_text if not present
+            if (!doc.full_text) {
+                doc.full_text = `[Demo Document: ${doc.filename}]\n\n` +
+                    `Classification: ${doc.classification}\n\n` +
+                    `This is a demonstration document. In production, the full document text ` +
+                    `would be displayed here with searchable content and highlighted snippets.\n\n` +
+                    `Extracted Data:\n${JSON.stringify(doc.extracted_data, null, 2)}`;
+            }
+        } else {
+            // Production mode: Fetch from API
+            const response = await fetch(`/api/audits/${auditId}/documents/${docId}`);
+            if (!response.ok) {
+                throw new Error(`Failed to fetch document: ${response.statusText}`);
+            }
+            doc = await response.json();
+        }
 
         // Update modal content
         modalFilename.textContent = doc.filename || 'Document';
@@ -1060,4 +1351,111 @@ function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
+}
+
+/**
+ * Toggle section collapse/expand
+ */
+function toggleSection(sectionId) {
+    const title = document.querySelector(`[onclick="toggleSection('${sectionId}')"]`);
+    const content = document.getElementById(`${sectionId}-filters`);
+
+    if (title && content) {
+        title.classList.toggle('collapsed');
+        content.classList.toggle('hidden');
+    }
+}
+
+/**
+ * Initialize company header canvas animation
+ */
+function initCompanyHeaderAnimation() {
+    const canvas = document.getElementById("fig84Canvas");
+    const wrap = document.getElementById("companyHeaderCanvas");
+
+    if (!canvas || !wrap) return;
+
+    const ctx = canvas.getContext("2d");
+
+    function resizeCanvas() {
+        const rect = wrap.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function drawRect(cx, cy, w, h, angle) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.strokeRect(-w / 2, -h / 2, w, h);
+        ctx.restore();
+    }
+
+    function draw(time) {
+        const t = time * 0.001;
+
+        const { width, height } = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, width, height);
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "#4b5563";
+
+        const baseX = width * 0.1;
+        const baseY = height * 1.05;
+        const apexX = width * 0.5;
+        const apexY = height * 0.55;
+
+        // Mountain fan of large rectangles
+        const bigCount = 26;
+        for (let i = 0; i < bigCount; i++) {
+            const alpha = i / (bigCount - 1);
+            const cx = baseX + (apexX - baseX) * alpha;
+            const cy = baseY + (apexY - baseY) * alpha;
+
+            const baseSize = 170;
+            const size = baseSize * (0.55 + alpha * 0.9);
+            const wobble = Math.sin(t * 0.6 + i * 0.4) * 0.15;
+            const tilt = -0.9 + alpha * 1.4 + wobble;
+
+            drawRect(cx, cy, size, size, tilt);
+        }
+
+        // Mid-chain of medium rectangles
+        const midCount = 22;
+        for (let i = 0; i < midCount; i++) {
+            const alpha = i / (midCount - 1);
+            const cx = apexX + Math.sin(alpha * 3.0 + t * 0.7) * 10;
+            const cy = apexY - alpha * height * 0.22;
+
+            const size = 60 * (1 - alpha * 0.45);
+            const tilt = 0.1 * Math.sin(t * 1.3 + alpha * 5.0);
+
+            drawRect(cx, cy, size, size, tilt);
+        }
+
+        // Top stack of small rectangles
+        const topCount = 8;
+        const headBaseX = apexX;
+        const headBaseY = apexY - height * 0.24;
+        for (let i = 0; i < topCount; i++) {
+            const alpha = i / (topCount - 1);
+            const cx = headBaseX + Math.sin(t * 0.7 + alpha * 2.4) * 12;
+            const cy = headBaseY - alpha * 40;
+
+            const size = 30 + alpha * 40;
+            const tilt = 0.25 * Math.sin(t * 1.1 + alpha * 3.0);
+
+            drawRect(cx, cy, size * 1.6, size, tilt);
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    // Initial setup
+    resizeCanvas();
+    requestAnimationFrame(draw);
 }
