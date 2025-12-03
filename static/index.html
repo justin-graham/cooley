@@ -12,22 +12,16 @@
     <nav class="sticky-nav">
         <div class="nav-container">
             <div class="nav-left">
-                <img src="/static/tieout-logo.svg" alt="Tieout" class="nav-logo">
-            </div>
-            <div class="nav-center">
-                <a href="#" class="nav-link">Platform</a>
-                <a href="#" class="nav-link">Features</a>
-                <a href="#" class="nav-link">Documentation</a>
+                <img src="/static/tieout-logo.png" alt="Tieout" class="nav-logo">
             </div>
             <div class="nav-right">
-                <a href="#" class="nav-link-secondary">Contact</a>
+                <a href="#" class="nav-link">LOGOUT</a>
             </div>
         </div>
     </nav>
 
     <!-- HEADER (Upload Page Only) -->
     <header id="upload-header">
-        <img src="/static/tieout-logo.svg" alt="Tieout" class="logo" style="max-width: 300px; height: auto; margin-bottom: 1rem;">
         <p class="subtitle">
             AI-powered corporate governance analysis. Upload your corporate documents and receive a structured audit in minutes.
         </p>
@@ -45,7 +39,11 @@
 
     <!-- PROGRESS SECTION -->
     <section id="progress" class="section" style="display: none;">
-        <div class="loader"></div>
+        <div class="loader-row">
+            <div class="loader"></div>
+            <div class="loader"></div>
+            <div class="loader"></div>
+        </div>
         <div id="progress-wrapper">
             <span id="progress-step">Processing</span>
             <span id="progress-text">Processing documents...</span>
@@ -54,165 +52,135 @@
 
     <!-- RESULTS SECTION -->
     <section id="results">
-        <!-- Two-Column Hero Section -->
-        <section class="hero-section">
-            <div class="hero-container">
-                <div class="hero-left">
-                    <!-- Company info dynamically rendered here -->
-                    <div class="company-header-content"></div>
-                </div>
-                <div class="hero-right">
-                    <!-- Animation visual -->
-                    <div class="hero-visual"></div>
+        <!-- Two-Column Hero Section (Martian Grid) -->
+        <section class="hero-section martian-grid">
+            <div class="hero-left martian-column-left">
+                <!-- Company info dynamically rendered here -->
+                <div class="company-header-content"></div>
+            </div>
+            <div class="hero-right martian-column-right">
+                <!-- Animation visual -->
+                <div class="hero-visual">
+                    <div class="fig-window">
+                        <div class="fig-header">
+                            <div class="fig-header-left">
+                                <span>&gt;_</span>
+                            </div>
+                            <div class="fig-header-center">[ Tieout ]</div>
+                            <div class="fig-header-right">
+                                <svg viewBox="0 0 24 24" fill="none">
+                                    <line x1="4" y1="7" x2="20" y2="7" stroke-width="1.4" />
+                                    <circle cx="10" cy="7" r="1.8" stroke-width="1.2" fill="none" />
+                                    <line x1="4" y1="17" x2="20" y2="17" stroke-width="1.4" />
+                                    <circle cx="14" cy="17" r="1.8" stroke-width="1.2" fill="none" />
+                                </svg>
+                            </div>
+                        </div>
+                        <div class="fig-inner">
+                            <div class="fig-canvas-wrap" id="hero-canvas-wrap">
+                                <canvas id="hero-canvas"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
 
-        <!-- Timeline Band Section -->
-        <section class="timeline-band">
+        <!-- Timeline Band Section (Martian Grid) -->
+        <section class="timeline-band martian-section">
+            <div class="timeline-band-header">
+                <p class="section-label">CORPORATE TIMELINE</p>
+            </div>
             <div class="timeline-band-container">
                 <div id="horizontal-timeline"></div>
                 <div id="timeline-date-display" class="timeline-date-display"></div>
+                <div id="color-legend" class="color-legend"></div>
             </div>
         </section>
 
-        <!-- Split Explainer Section: Cap Table + Event Stream -->
-        <section class="explainer-section">
-            <div class="explainer-container">
-                <div class="explainer-left">
-                    <div class="explainer-sticky">
-                        <h2>Cap Table</h2>
-                        <div id="cap-table-container"></div>
-                    </div>
+        <!-- Split Explainer Section: Cap Table + Event Stream (Martian Grid) -->
+        <section class="explainer-section martian-grid">
+            <div class="explainer-left martian-column-left">
+                <div class="explainer-sticky">
+                    <p class="section-label">CAP TABLE</p>
+                    <p class="date-display" id="cap-table-date">As of: <span></span></p>
+                    <div id="cap-table-container"></div>
                 </div>
-                <div class="explainer-right">
-                    <h2>Document Stream</h2>
-                    <div id="event-stream-container"></div>
-                </div>
+            </div>
+            <div class="explainer-right martian-column-right">
+                <p class="section-label">DOCUMENT STREAM</p>
+                <div id="event-stream-container"></div>
             </div>
         </section>
 
-        <!-- Features Grid Section -->
-        <section class="features-section">
-            <div class="features-container">
-                <div class="section-header">
-                    <h2>Document Breakdown</h2>
-                    <p class="section-intro">Comprehensive classification and analysis of your corporate documents</p>
-                </div>
-                <div class="features-grid" id="features-grid">
-                    <!-- Feature cards will be dynamically rendered here -->
-                </div>
+        <!-- Document Analysis Section (Accordion + Compliance) (Martian Grid) -->
+        <section class="features-section martian-grid">
+            <div class="features-left martian-column-left">
+                <h2 class="section-heading">Document Analysis</h2>
+                <p class="section-description">
+                    <span id="doc-count">10</span> documents classified into <span id="category-count">6</span> categories
+                </p>
+                <p class="section-description-small">
+                    <span id="issues-count">3</span> compliance issues detected
+                </p>
+                <p class="section-description-small">
+                    <span id="failed-count">0</span> documents failed to read
+                </p>
             </div>
-        </section>
-
-        <!-- Solutions Strip Section -->
-        <section class="solutions-strip">
-            <div class="solutions-container">
-                <!-- Logo Marquee -->
-                <div class="logo-marquee">
-                    <div class="marquee-track">
-                        <img src="/static/tieout-logo.svg" alt="Tieout" class="marquee-logo">
-                        <img src="/static/tieout-logo.svg" alt="Tieout" class="marquee-logo">
-                        <img src="/static/tieout-logo.svg" alt="Tieout" class="marquee-logo">
-                        <img src="/static/tieout-logo.svg" alt="Tieout" class="marquee-logo">
-                        <img src="/static/tieout-logo.svg" alt="Tieout" class="marquee-logo">
-                        <img src="/static/tieout-logo.svg" alt="Tieout" class="marquee-logo">
-                    </div>
-                </div>
-
-                <!-- Solution Cards -->
-                <div class="solution-cards">
-                    <!-- Featured Card -->
-                    <div class="solution-card featured">
-                        <img src="/static/stripe.png" alt="" class="solution-icon">
-                        <h3>Cap Table Document Auditing</h3>
-                        <p>AI-powered corporate governance analysis</p>
-                    </div>
-
-                    <!-- Placeholder Cards -->
-                    <div class="solution-card">
-                        <div class="solution-placeholder">
-                            <h3>Compliance Tracking</h3>
-                            <p>Coming soon</p>
+            <div class="features-right martian-column-right">
+                <div id="document-accordion" class="document-accordion">
+                    <div class="accordion-item">
+                        <div class="accordion-header">
+                            <h3 class="accordion-title">Compliance Issues</h3>
+                            <span class="accordion-toggle">+</span>
+                        </div>
+                        <div class="accordion-content">
+                            <div class="accordion-body">
+                                Compliance issues will appear here.
+                            </div>
                         </div>
                     </div>
-                    <div class="solution-card">
-                        <div class="solution-placeholder">
-                            <h3>Data Room Export</h3>
-                            <p>Coming soon</p>
+                    <div class="accordion-item">
+                        <div class="accordion-header">
+                            <h3 class="accordion-title">Failed Documents</h3>
+                            <span class="accordion-toggle">+</span>
+                        </div>
+                        <div class="accordion-content">
+                            <div class="accordion-body">
+                                Failed documents will appear here.
+                            </div>
                         </div>
                     </div>
-                    <div class="solution-card">
-                        <div class="solution-placeholder">
-                            <h3>API Integration</h3>
-                            <p>Coming soon</p>
-                        </div>
-                    </div>
+                    <!-- Accordion items will be dynamically rendered here -->
                 </div>
             </div>
         </section>
 
-        <!-- Filter Sidebar: Type & Topic -->
-        <div class="reference-tabs">
-            <div class="tab-header">
-                <div class="tab-section">
-                    <div class="tab-section-title" onclick="toggleSection('type')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
-                            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
-                        </svg>
-                        <span>Type</span>
-                    </div>
-                    <div id="type-filters" class="tab-content">
-                        <div class="filter-item" data-filter="blog">
-                            <div class="filter-checkbox"></div>
-                            <span class="filter-label">Blog <span class="filter-count" id="count-blog">(0)</span></span>
-                        </div>
-                        <div class="filter-item" data-filter="video">
-                            <div class="filter-checkbox"></div>
-                            <span class="filter-label">Video <span class="filter-count" id="count-video">(0)</span></span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="tab-section">
-                    <div class="tab-section-title" onclick="toggleSection('topic')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                            <polyline points="6 9 12 15 18 9"></polyline>
-                        </svg>
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"></circle>
-                            <line x1="2" y1="12" x2="22" y2="12"></line>
-                            <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
-                        </svg>
-                        <span>Topic</span>
-                    </div>
-                    <div id="topic-filters" class="tab-content">
-                        <div id="documents-content"></div>
-                        <div id="issues-content"></div>
-                    </div>
-                </div>
+        <!-- CTA Section (Martian Grid) -->
+        <section class="cta-section martian-section">
+            <div class="cta-container">
+                <h2 class="cta-heading">Download <span id="cta-company-name">[Company Name]</span> Corporate Governance Tieout</h2>
+                <button class="cta-button" onclick="window.location.href='/'">
+                    DOWNLOAD
+                </button>
             </div>
-        </div>
+        </section>
 
-        <!-- Failed Documents (if any) -->
-        <div id="failed-section" class="section" style="display: none;">
-            <h2>Failed to Parse</h2>
-            <p class="mb-md monospace" style="font-size: 0.875rem; color: var(--text-secondary);">
-                The following documents could not be processed:
-            </p>
-            <div id="failed-docs-content"></div>
-        </div>
     </section>
 
-    <!-- Footer -->
-    <footer style="margin-top: 4rem; padding-top: 2rem; border-top: 1px solid var(--border); text-align: center;">
-        <p class="monospace" style="font-size: 0.75rem; color: var(--text-secondary);">
-            Tieout v1.0 | Justin Graham
-        </p>
+    <!-- Footer (Martian Grid) -->
+    <footer class="martian-footer martian-grid">
+        <div class="footer-left martian-column-left">
+                <img src="/static/tieout-logo.png" alt="Tieout" class="footer-logo footer-logo-fill">
+        </div>
+        <div class="footer-right martian-column-right">
+            <ul class="footer-links">
+                <li><a href="/">HOME</a></li>
+                <li><a href="/contact">CONTACT</a></li>
+                <li><a href="/privacy">PRIVACY POLICY</a></li>
+            </ul>
+            <p class="footer-copyright">Tieout v1.0 | Justin Graham</p>
+        </div>
     </footer>
 
     <!-- Document Viewer Modal -->

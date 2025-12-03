@@ -99,9 +99,11 @@ async function loadDemoMode() {
  */
 function convertDemoTimelineToEvents(timeline, documents) {
     console.log('[CONVERT] Timeline events:', timeline?.length || 0);
+    console.log('[CONVERT] Full timeline data:', timeline);
+
     if (!timeline || !Array.isArray(timeline)) return [];
 
-    return timeline.map((event, index) => {
+    const results = timeline.map((event, index) => {
         // Extract shareholder name from description if present
         let shareholderName = null;
         let shareClass = null;
@@ -137,6 +139,14 @@ function convertDemoTimelineToEvents(timeline, documents) {
             }
         }
 
+        console.log(`[CONVERT] Event ${index}:`, {
+            date: event.date,
+            description: event.description,
+            extractedType: eventType,
+            shareholderName,
+            shareDelta
+        });
+
         return {
             id: `demo-event-${index}`,
             audit_id: 999,
@@ -154,6 +164,11 @@ function convertDemoTimelineToEvents(timeline, documents) {
             details: {}
         };
     });
+
+    console.log('[CONVERT] Generated events:', results.length);
+    console.log('[CONVERT] Event details:', results);
+
+    return results;
 }
 
 /**
@@ -366,18 +381,39 @@ async function renderResults(results) {
     // Render two-column hero header
     renderCompanyHeader(results);
 
-    // Render features grid with document type cards
-    renderFeaturesGrid(results.documents);
+    // Normalize compliance issues source
+    const complianceArray = results.compliance_issues || results.issues || [];
 
-    // Render documents in tab
-    renderDocuments(results.documents);
+    // Render document breakdown accordion
+    renderDocumentAccordion(
+        results.documents || [],
+        results.company_name,
+        results.failed_documents || [],
+        complianceArray
+    );
 
-    // Render issues in tab
-    renderIssues(results.issues);
+    // NOTE: renderDocuments() and renderIssues() removed - those DOM containers no longer exist
+    // Documents are now displayed in the accordion above
 
-    // Render failed documents (if any)
-    if (results.failed_documents && results.failed_documents.length > 0) {
-        renderFailedDocuments(results.failed_documents);
+    // Update summary counts on the left
+    const docCount = results.documents ? results.documents.length : 0;
+    const categoryCount = new Set((results.documents || []).map(doc => (doc.category || doc.classification || 'Other'))).size;
+    const issuesCount = complianceArray.length;
+    const failedCount = results.failed_documents ? results.failed_documents.length : 0;
+
+    const docCountEl = document.getElementById('doc-count');
+    const catCountEl = document.getElementById('category-count');
+    const issuesCountEl = document.getElementById('issues-count');
+    const failedCountEl = document.getElementById('failed-count');
+    if (docCountEl) docCountEl.textContent = docCount;
+    if (catCountEl) catCountEl.textContent = categoryCount;
+    if (issuesCountEl) issuesCountEl.textContent = issuesCount;
+    if (failedCountEl) failedCountEl.textContent = failedCount;
+
+    // Dynamic CTA company name
+    const ctaName = document.getElementById('cta-company-name');
+    if (ctaName && results.company_name) {
+        ctaName.textContent = results.company_name;
     }
 
     // Initialize time-travel view with error handling
@@ -401,7 +437,6 @@ async function renderResults(results) {
  */
 function renderCompanyHeader(results) {
     const leftContainer = document.querySelector('.hero-left .company-header-content');
-    const rightContainer = document.querySelector('.hero-right .hero-visual');
 
     // Calculate stats
     const docCount = results.documents ? results.documents.length : 0;
@@ -425,6 +460,7 @@ function renderCompanyHeader(results) {
     // Render left column: Company info and stats
     const leftHTML = `
         <h1 class="company-name">${results.company_name || 'Unknown Company'}</h1>
+        <p class="company-period">${dateRange}</p>
         <div class="company-stats">
             <div class="company-stat">
                 <span class="company-stat-label">Documents</span>
@@ -441,38 +477,10 @@ function renderCompanyHeader(results) {
         </div>
     `;
 
-    // Render right column: Animated canvas visual
-    const rightHTML = `
-        <div class="fig-window">
-            <div class="fig-header">
-                <div class="fig-header-left">
-                    <span>&gt;_</span>
-                </div>
-                <div class="fig-header-center">
-                    [ Tieout ]
-                </div>
-                <div class="fig-header-right">
-                    <svg viewBox="0 0 24 24" fill="none">
-                        <line x1="4" y1="7" x2="20" y2="7" stroke-width="1.4" />
-                        <circle cx="10" cy="7" r="1.8" stroke-width="1.2" fill="none" />
-                        <line x1="4" y1="17" x2="20" y2="17" stroke-width="1.4" />
-                        <circle cx="14" cy="17" r="1.8" stroke-width="1.2" fill="none" />
-                    </svg>
-                </div>
-            </div>
-            <div class="fig-inner">
-                <div class="fig-canvas-wrap" id="companyHeaderCanvas">
-                    <canvas id="fig84Canvas"></canvas>
-                </div>
-            </div>
-        </div>
-    `;
-
     leftContainer.innerHTML = leftHTML;
-    rightContainer.innerHTML = rightHTML;
 
-    // Initialize canvas animation
-    initCompanyHeaderAnimation();
+    // Initialize canvas animation on the hero-canvas element
+    initHeroCanvas();
 }
 
 /**
@@ -512,14 +520,20 @@ function renderDocuments(documents) {
 }
 
 /**
- * Render features grid with document type cards
+ * Render document breakdown accordion (Martian-style)
  */
-function renderFeaturesGrid(documents) {
-    const container = document.getElementById('features-grid');
+function renderDocumentAccordion(documents, companyName, failedDocuments = [], complianceIssues = []) {
+    const container = document.getElementById('document-accordion');
+    const nameSpan = document.getElementById('company-name-breakdown');
 
-    // Group documents by classification
+    // Update company name in heading
+    if (nameSpan && companyName) {
+        nameSpan.textContent = companyName;
+    }
+
+    // Group documents by classification/category
     const typeGroups = documents.reduce((acc, doc) => {
-        const type = doc.classification || 'Other';
+        const type = doc.category || doc.classification || 'Other';
         if (!acc[type]) {
             acc[type] = { count: 0, docs: [] };
         }
@@ -528,20 +542,101 @@ function renderFeaturesGrid(documents) {
         return acc;
     }, {});
 
-    // Sort by count (descending) and take top 6
-    const topTypes = Object.entries(typeGroups)
-        .sort((a, b) => b[1].count - a[1].count)
-        .slice(0, 6);
+    // Sort by count (descending)
+    const sortedTypes = Object.entries(typeGroups)
+        .sort((a, b) => b[1].count - a[1].count);
 
-    // Render cards
-    const html = topTypes.map(([type, data]) => `
-        <div class="feature-card">
-            <h3>${type}</h3>
-            <p>${data.count} document${data.count !== 1 ? 's' : ''} classified</p>
+    const complianceItem = `
+        <div class="accordion-item">
+            <div class="accordion-header" onclick="toggleAccordion(this)">
+                <h3 class="accordion-title">Compliance Issues</h3>
+                <span class="accordion-toggle">+</span>
+            </div>
+            <div class="accordion-content">
+                <div class="accordion-body">
+                    ${complianceIssues.length
+                        ? complianceIssues.map(issue => {
+                            if (typeof issue === 'string') return `<div class="issue-note spacer">${issue}</div>`;
+                            const sev = issue.severity ? issue.severity.toUpperCase() : 'ISSUE';
+                            const desc = issue.description || issue.message || JSON.stringify(issue);
+                            const sevClass = sev === 'CRITICAL' ? 'issue-critical' : sev === 'WARNING' ? 'issue-warning' : 'issue-note';
+                            return `<div class="${sevClass} spacer"><strong>${sev}:</strong> ${desc}</div>`;
+                          }).join('')
+                        : 'No compliance issues.'}
+                </div>
+            </div>
+        </div>
+    `;
+
+    const failedItem = `
+        <div class="accordion-item">
+            <div class="accordion-header" onclick="toggleAccordion(this)">
+                <h3 class="accordion-title">Failed Documents</h3>
+                <span class="accordion-toggle">+</span>
+            </div>
+            <div class="accordion-content">
+                <div class="accordion-body">
+                    ${failedDocuments.length
+                        ? failedDocuments.map(doc => `<div>${doc.filename || doc}</div>`).join('')
+                        : 'No failed documents.'}
+                </div>
+            </div>
+        </div>
+    `;
+
+    // Render accordion items
+    const docItems = sortedTypes.map(([type, data]) => `
+        <div class="accordion-item">
+            <div class="accordion-header" onclick="toggleAccordion(this)">
+                <h3 class="accordion-title">${type}</h3>
+                <span class="accordion-toggle">+</span>
+            </div>
+            <div class="accordion-content">
+                <div class="accordion-body">
+                    ${(data.docs || []).map(doc => {
+                        const docId = doc.document_id || doc.id || '';
+                        const name = doc.filename || 'Untitled';
+                        return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document">${name}</div>`;
+                    }).join('')}
+                </div>
+            </div>
         </div>
     `).join('');
 
+    const html = complianceItem + failedItem + docItems;
+
     container.innerHTML = html || '<p style="text-align: center; color: var(--text-secondary);">No documents to display</p>';
+
+    // Wire up newly added document links to open modal
+    const docLinks = container.querySelectorAll('.doc-link');
+    docLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const docId = link.getAttribute('data-doc-id');
+            const snippet = link.getAttribute('data-snippet') || '';
+            if (docId) {
+                showDocumentModal(AuditViewState.auditId, docId, snippet || null);
+            }
+        });
+    });
+}
+
+/**
+ * Toggle accordion item open/closed
+ */
+function toggleAccordion(headerElement) {
+    const item = headerElement.parentElement;
+    const wasActive = item.classList.contains('active');
+
+    // Close all accordion items
+    document.querySelectorAll('.accordion-item').forEach(el => {
+        el.classList.remove('active');
+    });
+
+    // Toggle current item (if it wasn't already open)
+    if (!wasActive) {
+        item.classList.add('active');
+    }
 }
 
 /**
@@ -792,12 +887,15 @@ async function initTimeTravel(auditId) {
         }
 
         if (AuditViewState.allEvents.length === 0) {
+            console.error('[TIMETRAVEL] No events generated!');
             // No events found - show empty state
             document.getElementById('horizontal-timeline').innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">No events found.</p>';
             document.getElementById('cap-table-container').innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">No equity events found in this audit.</p>';
             document.getElementById('event-stream-container').innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">No transactions to display.</p>';
             return;
         }
+
+        console.log('[TIMETRAVEL] Events loaded:', AuditViewState.allEvents.length);
 
         // Calculate date range
         const dates = AuditViewState.allEvents.map(e => new Date(e.event_date));
@@ -848,7 +946,7 @@ function renderHorizontalTimeline() {
                 const positionPercent = padding + (events.length > 1
                     ? (index / (events.length - 1)) * usableWidth
                     : usableWidth / 2);
-                const color = event.shareholder_name ? getShareholderColor(event.shareholder_name) : '#666';
+                const color = '#D62828';
 
                 return `
                     <div class="timeline-node-wrapper" style="left: ${positionPercent}%;" data-event-id="${event.id}">
@@ -972,20 +1070,6 @@ async function renderCapTable() {
             return;
         }
 
-        // Add color legend
-        const legend = document.createElement('div');
-        legend.className = 'color-legend';
-        legend.innerHTML = `
-            <div class="legend-title">Shareholders:</div>
-            <div class="legend-items">
-                ${AuditViewState.currentCapTable.shareholders.map(sh => {
-                    const color = getShareholderColor(sh.shareholder);
-                    return `<span class="legend-item"><span class="legend-square" style="background-color: ${color};"></span>${sh.shareholder}</span>`;
-                }).join('')}
-            </div>
-        `;
-        container.appendChild(legend);
-
         // Build table
         const table = document.createElement('table');
         table.className = 'cap-table';
@@ -1082,6 +1166,11 @@ function renderEventStream() {
         const card = document.createElement('div');
         const statusClass = event.compliance_status.toLowerCase();
         card.className = `event-card ${statusClass}`;
+        let shareholderColor = null;
+        if (event.shareholder_name) {
+            shareholderColor = getShareholderColor(event.shareholder_name);
+            card.style.borderLeftColor = shareholderColor;
+        }
 
         const eventDateStr = new Date(event.event_date).toLocaleDateString('en-US', {
             year: 'numeric',
@@ -1094,7 +1183,6 @@ function renderEventStream() {
 
         // Build details text with colored pill
         let detailsText = '';
-        let shareholderColor = null;
         if (event.shareholder_name) {
             shareholderColor = getShareholderColor(event.shareholder_name);
             detailsText = `<span class="shareholder-pill" style="background-color: ${shareholderColor};">${event.shareholder_name}</span>`;
@@ -1448,6 +1536,113 @@ function initCompanyHeaderAnimation() {
             const tilt = 0.25 * Math.sin(t * 1.1 + alpha * 3.0);
 
             drawRect(cx, cy, size * 1.6, size, tilt);
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    window.addEventListener("resize", resizeCanvas);
+
+    // Initial setup
+    resizeCanvas();
+    requestAnimationFrame(draw);
+}
+
+/**
+ * Initialize hero canvas animation (Martian Grid version)
+ */
+function initHeroCanvas() {
+    const canvas = document.getElementById("hero-canvas");
+    if (!canvas) return;
+
+    const ctx = canvas.getContext("2d");
+    const wrap = canvas.parentElement;
+    const COLORS = ["#000000", "#D62828", "#F37022", "#0ABAB5"];
+
+    function resizeCanvas() {
+        const rect = wrap.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = rect.height * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function drawRect(cx, cy, w, h, angle) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(angle);
+        ctx.strokeRect(-w / 2, -h / 2, w, h);
+        ctx.restore();
+    }
+
+    function draw(time) {
+        const t = time * 0.001;
+
+        const { width, height } = canvas.getBoundingClientRect();
+        ctx.clearRect(0, 0, width, height);
+
+        ctx.lineWidth = 1;
+
+        const baseX = width * 0.1;
+        const baseY = height * 1.05;
+        const apexX = width * 0.5;
+        const apexY = height * 0.55;
+
+        // Mountain fan of large rectangles (with jitter and color)
+        const bigCount = 26;
+        for (let i = 0; i < bigCount; i++) {
+            const alpha = i / (bigCount - 1);
+            const jitter = (i * 13.37) % 1;
+            const offset = (jitter - 0.5) * 6;
+            const cx = baseX + (apexX - baseX) * alpha + offset;
+            const cy = baseY + (apexY - baseY) * alpha;
+
+            const baseSize = 170;
+            const size = baseSize * (0.55 + alpha * 0.9);
+            const wobble = Math.sin(t * 0.6 + i * 0.4) * 0.15;
+            const tilt = -0.9 + alpha * 1.4 + wobble;
+
+            ctx.save();
+            ctx.globalAlpha = 0.22;
+            ctx.strokeStyle = COLORS[i % COLORS.length];
+            drawRect(cx, cy, size, size, tilt);
+            ctx.restore();
+        }
+
+        // Mid-chain of medium rectangles
+        const midCount = 22;
+        for (let i = 0; i < midCount; i++) {
+            const alpha = i / (midCount - 1);
+            const cx = apexX + Math.sin(alpha * 3.0 + t * 0.7) * 10;
+            const cy = apexY - alpha * height * 0.22;
+
+            const size = 60 * (1 - alpha * 0.45);
+            const tilt = 0.1 * Math.sin(t * 1.3 + alpha * 5.0);
+
+            ctx.save();
+            ctx.globalAlpha = 0.4;
+            ctx.strokeStyle = COLORS[i % COLORS.length];
+            drawRect(cx, cy, size, size, tilt);
+            ctx.restore();
+        }
+
+        // Top stack of small rectangles
+        const topCount = 8;
+        const headBaseX = apexX;
+        const headBaseY = apexY - height * 0.24;
+        for (let i = 0; i < topCount; i++) {
+            const alpha = i / (topCount - 1);
+            const cx = headBaseX + Math.sin(t * 0.7 + alpha * 2.4) * 12;
+            const cy = headBaseY - alpha * 40;
+
+            const size = 30 + alpha * 40;
+            const tilt = 0.25 * Math.sin(t * 1.1 + alpha * 3.0);
+
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            ctx.strokeStyle = COLORS[i % COLORS.length];
+            drawRect(cx, cy, size * 1.6, size, tilt);
+            ctx.restore();
         }
 
         requestAnimationFrame(draw);

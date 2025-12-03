@@ -1,0 +1,250 @@
+{
+  "id": 999,
+  "status": "completed",
+  "company_name": "Demo Corp",
+  "documents": [
+    {
+      "filename": "certificate_of_incorporation.pdf",
+      "classification": "Charter Document",
+      "confidence": 0.98,
+      "extracted_data": {
+        "company_name": "Demo Corp",
+        "incorporation_date": "2020-01-15",
+        "incorporation_state": "Delaware",
+        "authorized_common": 10000000,
+        "authorized_preferred": 5000000
+      }
+    },
+    {
+      "filename": "stock_purchase_alice_chen.pdf",
+      "classification": "Stock Purchase Agreement",
+      "confidence": 0.95,
+      "extracted_data": {
+        "shareholder": "Alice Chen",
+        "share_type": "Common",
+        "shares_issued": 3000000,
+        "price_per_share": 0.001,
+        "total_amount": 3000,
+        "issuance_date": "2020-01-15"
+      }
+    },
+    {
+      "filename": "stock_purchase_bob_martinez.pdf",
+      "classification": "Stock Purchase Agreement",
+      "confidence": 0.96,
+      "extracted_data": {
+        "shareholder": "Bob Martinez",
+        "share_type": "Common",
+        "shares_issued": 2000000,
+        "price_per_share": 0.001,
+        "total_amount": 2000,
+        "issuance_date": "2020-01-15"
+      }
+    },
+    {
+      "filename": "board_consent_seed_round.pdf",
+      "classification": "Board Consent",
+      "confidence": 0.97,
+      "extracted_data": {
+        "meeting_date": "2021-03-10",
+        "meeting_type": "Written Consent",
+        "decisions": [
+          {
+            "decision_type": "stock_issuance",
+            "description": "Approved issuance of 1,500,000 shares of Series Seed Preferred Stock",
+            "approval_status": "Approved"
+          }
+        ]
+      }
+    },
+    {
+      "filename": "series_seed_venture_capital_llc.pdf",
+      "classification": "Stock Purchase Agreement",
+      "confidence": 0.94,
+      "extracted_data": {
+        "shareholder": "Venture Capital LLC",
+        "share_type": "Preferred",
+        "shares_issued": 1500000,
+        "price_per_share": 0.50,
+        "total_amount": 750000,
+        "issuance_date": "2021-03-15"
+      }
+    },
+    {
+      "filename": "option_grant_sarah_williams.pdf",
+      "classification": "Option Grant",
+      "confidence": 0.93,
+      "extracted_data": {
+        "recipient": "Sarah Williams",
+        "shares_granted": 200000,
+        "strike_price": 0.50,
+        "vesting_schedule": "4 years, 1 year cliff",
+        "grant_date": "2021-06-01"
+      }
+    },
+    {
+      "filename": "83b_election_alice_chen.pdf",
+      "classification": "83(b) Election",
+      "confidence": 0.99,
+      "extracted_data": {
+        "recipient": "Alice Chen",
+        "filing_date": "2020-02-01",
+        "shares": 3000000
+      }
+    },
+    {
+      "filename": "board_consent_series_a.pdf",
+      "classification": "Board Consent",
+      "confidence": 0.96,
+      "extracted_data": {
+        "meeting_date": "2022-09-20",
+        "meeting_type": "Written Consent",
+        "decisions": [
+          {
+            "decision_type": "stock_issuance",
+            "description": "Approved issuance of 2,000,000 shares of Series A Preferred Stock",
+            "approval_status": "Approved"
+          }
+        ]
+      }
+    },
+    {
+      "filename": "series_a_growth_partners.pdf",
+      "classification": "Stock Purchase Agreement",
+      "confidence": 0.95,
+      "extracted_data": {
+        "shareholder": "Growth Partners Fund",
+        "share_type": "Preferred",
+        "shares_issued": 2000000,
+        "price_per_share": 2.00,
+        "total_amount": 4000000,
+        "issuance_date": "2022-10-01"
+      }
+    },
+    {
+      "filename": "bylaws.pdf",
+      "classification": "Bylaws",
+      "confidence": 0.97,
+      "extracted_data": {
+        "company_name": "Demo Corp",
+        "adoption_date": "2020-01-15"
+      }
+    }
+  ],
+  "timeline": [
+    {
+      "date": "2020-01-15",
+      "event": "Company Formation",
+      "description": "Demo Corp incorporated in Delaware with 10,000,000 authorized common shares and 5,000,000 authorized preferred shares",
+      "category": "formation",
+      "source_documents": ["certificate_of_incorporation.pdf"]
+    },
+    {
+      "date": "2020-01-15",
+      "event": "Founder Stock Issuance",
+      "description": "Alice Chen purchased 3,000,000 common shares at $0.001/share ($3,000 total)",
+      "category": "equity",
+      "source_documents": ["stock_purchase_alice_chen.pdf"]
+    },
+    {
+      "date": "2020-01-15",
+      "event": "Founder Stock Issuance",
+      "description": "Bob Martinez purchased 2,000,000 common shares at $0.001/share ($2,000 total)",
+      "category": "equity",
+      "source_documents": ["stock_purchase_bob_martinez.pdf"]
+    },
+    {
+      "date": "2020-02-01",
+      "event": "83(b) Election Filed",
+      "description": "Alice Chen filed 83(b) election for 3,000,000 shares",
+      "category": "compliance",
+      "source_documents": ["83b_election_alice_chen.pdf"]
+    },
+    {
+      "date": "2021-03-10",
+      "event": "Board Approval - Seed Round",
+      "description": "Board approved issuance of 1,500,000 Series Seed Preferred shares",
+      "category": "governance",
+      "source_documents": ["board_consent_seed_round.pdf"]
+    },
+    {
+      "date": "2021-03-15",
+      "event": "Seed Financing",
+      "description": "Venture Capital LLC purchased 1,500,000 Series Seed Preferred shares at $0.50/share ($750,000 total)",
+      "category": "financing",
+      "source_documents": ["series_seed_venture_capital_llc.pdf"]
+    },
+    {
+      "date": "2021-06-01",
+      "event": "Employee Option Grant",
+      "description": "Sarah Williams granted 200,000 stock options at $0.50 strike price (4-year vesting, 1-year cliff)",
+      "category": "equity",
+      "source_documents": ["option_grant_sarah_williams.pdf"]
+    },
+    {
+      "date": "2022-09-20",
+      "event": "Board Approval - Series A",
+      "description": "Board approved issuance of 2,000,000 Series A Preferred shares",
+      "category": "governance",
+      "source_documents": ["board_consent_series_a.pdf"]
+    },
+    {
+      "date": "2022-10-01",
+      "event": "Series A Financing",
+      "description": "Growth Partners Fund purchased 2,000,000 Series A Preferred shares at $2.00/share ($4,000,000 total)",
+      "category": "financing",
+      "source_documents": ["series_a_growth_partners.pdf"]
+    }
+  ],
+  "cap_table": {
+    "Alice Chen": {
+      "shares": 3000000,
+      "share_type": "Common",
+      "ownership_percent": 36.59
+    },
+    "Bob Martinez": {
+      "shares": 2000000,
+      "share_type": "Common",
+      "ownership_percent": 24.39
+    },
+    "Venture Capital LLC": {
+      "shares": 1500000,
+      "share_type": "Preferred",
+      "ownership_percent": 18.29
+    },
+    "Growth Partners Fund": {
+      "shares": 2000000,
+      "share_type": "Preferred",
+      "ownership_percent": 24.39
+    },
+    "Sarah Williams (Options)": {
+      "shares": 200000,
+      "share_type": "Option",
+      "ownership_percent": 2.44
+    }
+  },
+  "issues": [
+    {
+      "type": "CRITICAL",
+      "title": "Missing 83(b) Election",
+      "description": "Bob Martinez received 2,000,000 restricted common shares on 2020-01-15 but no 83(b) election was found within the required 30-day window. This may result in significant tax liability upon vesting.",
+      "affected_documents": ["stock_purchase_bob_martinez.pdf"],
+      "severity": "critical"
+    },
+    {
+      "type": "WARNING",
+      "title": "Option Grant Without Board Approval",
+      "description": "Sarah Williams received option grant on 2021-06-01, but no corresponding board consent or minutes approving this grant were found in the document set.",
+      "affected_documents": ["option_grant_sarah_williams.pdf"],
+      "severity": "warning"
+    },
+    {
+      "type": "NOTE",
+      "title": "Incomplete Document Set",
+      "description": "Common gaps detected: No shareholder agreement, no IP assignment agreements, no employment agreements. Consider requesting these documents for a complete corporate audit.",
+      "affected_documents": [],
+      "severity": "note"
+    }
+  ],
+  "failed_documents": []
+}
