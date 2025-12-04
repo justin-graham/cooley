@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tieout: Corporate Governance Auditing</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="stylesheet" href="/static/landing.css">
+</head>
+<body class="landing-page">
+    <!-- Header Text -->
+    <header class="landing-header">
+        <h1 class="landing-title">AI-powered corporate governance analysis.</h1>
+    </header>
+
+    <!-- Main content: Animation + Auth in two columns -->
+    <div class="landing-main">
+        <section class="landing-animation">
+            <div class="fig-window">
+                <div class="fig-header">
+                    <div class="fig-header-left">
+                        <span>&gt;_</span>
+                    </div>
+                    <div class="fig-header-center">[ Tieout ]</div>
+                    <div class="fig-header-right">
+                        <svg viewBox="0 0 24 24" fill="none">
+                            <line x1="4" y1="7" x2="20" y2="7" stroke-width="1.4" />
+                            <circle cx="10" cy="7" r="1.8" stroke-width="1.2" fill="none" />
+                            <line x1="4" y1="17" x2="20" y2="17" stroke-width="1.4" />
+                            <circle cx="14" cy="17" r="1.8" stroke-width="1.2" fill="none" />
+                        </svg>
+                    </div>
+                </div>
+                <div class="fig-inner">
+                    <div class="fig-canvas-wrap" id="fig18Wrap">
+                        <canvas id="fig18Canvas"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Auth Form -->
+        <section class="landing-auth">
+            <form id="auth-form" class="auth-form">
+                <div class="form-group">
+                    <input
+                        type="text"
+                        id="username"
+                        name="username"
+                        placeholder="email"
+                        required
+                        autocomplete="username"
+                    />
+                </div>
+                <div class="form-group">
+                    <input
+                        type="password"
+                        id="password"
+                        name="password"
+                        placeholder="password"
+                        required
+                        autocomplete="current-password"
+                    />
+                </div>
+                <button type="submit" class="auth-submit">Sign In</button>
+                <div id="auth-error" class="auth-error" style="display: none;"></div>
+            </form>
+        </section>
+    </div>
+
+    <!-- Footer (same as home page, but with access code request) -->
+    <footer class="martian-footer martian-grid">
+        <div class="footer-left martian-column-left">
+            <img src="/static/tieout-logo.png" alt="Tieout" class="footer-logo footer-logo-fill">
+        </div>
+        <div class="footer-right martian-column-right">
+            <form id="access-form" class="access-form">
+                <input
+                    type="email"
+                    id="access-email"
+                    name="email"
+                    placeholder="email@example.com"
+                    required
+                />
+                <button type="submit" class="access-submit">Get invitation</button>
+            </form>
+            <p class="footer-copyright">Tieout v1.0 | Justin Graham</p>
+        </div>
+    </footer>
+
+    <script src="/static/landing.js"></script>
+</body>
+</html>

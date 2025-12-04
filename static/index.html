@@ -15,7 +15,9 @@
                 <img src="/static/tieout-logo.png" alt="Tieout" class="nav-logo">
             </div>
             <div class="nav-right">
-                <a href="#" class="nav-link">LOGOUT</a>
+                <a href="#" class="nav-link" id="home-link">HOME</a>
+                <a href="#" class="nav-link" id="past-audits-link">PAST AUDITS</a>
+                <a href="#" class="nav-link" id="logout-link">LOGOUT</a>
             </div>
         </div>
     </nav>
@@ -35,6 +37,21 @@
             <p class="secondary-text">Maximum file size: 50MB</p>
         </div>
         <input type="file" id="file-input" accept=".zip" style="display: none;">
+    </section>
+
+    <!-- PAST AUDITS SECTION -->
+    <section id="past-audits-section" class="martian-grid" style="display: none;">
+        <!-- Left column: Heading -->
+        <div class="past-audits-left martian-column-left">
+            <h2 class="section-heading">Past Tieouts</h2>
+        </div>
+
+        <!-- Right column: Accordion list -->
+        <div class="past-audits-right martian-column-right">
+            <div id="past-audits-accordion" class="past-audits-accordion">
+                <!-- Dynamically populated accordion items -->
+            </div>
+        </div>
     </section>
 
     <!-- PROGRESS SECTION -->
@@ -175,7 +192,7 @@
         </div>
         <div class="footer-right martian-column-right">
             <ul class="footer-links">
-                <li><a href="/">HOME</a></li>
+                <li><a href="/">SECURITY</a></li>
                 <li><a href="/contact">CONTACT</a></li>
                 <li><a href="/privacy">PRIVACY POLICY</a></li>
             </ul>

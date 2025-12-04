@@ -375,6 +375,9 @@ async function renderResults(results) {
     // Hide upload page elements
     document.getElementById('upload-header').style.display = 'none';
 
+    // Ensure nav shows Home when off the landing screen
+    setHomeLinkVisibility(true);
+
     // Show results section
     resultsSection.style.display = 'block';
 
@@ -1270,6 +1273,162 @@ function debounce(func, wait) {
     };
 }
 
+/**
+ * Toggle Home link visibility in the nav
+ */
+function setHomeLinkVisibility(isVisible) {
+    const homeLink = document.getElementById('home-link');
+    if (!homeLink) return;
+    homeLink.style.display = isVisible ? '' : 'none';
+}
+
+// ============================================================================
+// PAST AUDITS FEATURE
+// ============================================================================
+
+/**
+ * Load and display past audits list
+ */
+async function loadPastAudits() {
+    const container = document.getElementById('past-audits-accordion');
+    const section = document.getElementById('past-audits-section');
+
+    try {
+        // Show section
+        hideAllSections();
+        section.style.display = 'grid';
+        setHomeLinkVisibility(true);
+
+        // Show loading state
+        container.innerHTML = '<p style="color: var(--text-secondary);">Loading past audits...</p>';
+
+        // Fetch audits
+        const response = await fetch('/api/audits');
+        if (!response.ok) {
+            throw new Error('Failed to fetch audits');
+        }
+
+        const audits = await response.json();
+
+        // Render accordion
+        if (audits.length === 0) {
+            container.innerHTML = '<p style="color: var(--text-secondary);">No past audits yet. Upload your first document set to get started.</p>';
+            return;
+        }
+
+        const html = audits.map(audit => {
+            const date = new Date(audit.created_at).toLocaleDateString('en-US', {
+                month: 'short',
+                day: 'numeric',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            // Determine display name
+            const displayName = audit.company_name || audit.upload_filename || 'Unknown Company';
+
+            // Status badge
+            let statusBadge = '';
+            if (audit.status === 'complete') {
+                statusBadge = '<span class="status-badge status-complete">✓ Complete</span>';
+            } else if (audit.status === 'processing') {
+                statusBadge = '<span class="status-badge status-processing">Processing...</span>';
+            } else if (audit.status === 'error') {
+                statusBadge = '<span class="status-badge status-error">⚠ Failed</span>';
+            }
+
+            return `
+                <div class="accordion-item audit-item ${audit.status !== 'complete' ? 'disabled' : ''}"
+                     data-audit-id="${audit.id}"
+                     ${audit.status === 'complete' ? 'onclick="loadAuditById(\'' + audit.id + '\')"' : ''}>
+                    <div class="accordion-header">
+                        <div class="audit-header-content">
+                            <h3 class="accordion-title">${displayName}</h3>
+                            <p class="audit-metadata">
+                                ${date} • ${audit.document_count} documents ${statusBadge}
+                            </p>
+                            ${audit.upload_filename && audit.company_name ?
+                                `<p class="audit-filename">${audit.upload_filename}</p>` : ''}
+                        </div>
+                        ${audit.status === 'complete' ? '<span class="accordion-toggle">→</span>' : ''}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        container.innerHTML = html;
+
+    } catch (error) {
+        console.error('Error loading past audits:', error);
+        container.innerHTML = '<p style="color: var(--accent);">Error loading past audits. Please refresh the page.</p>';
+    }
+}
+
+/**
+ * Load specific audit by ID and render results
+ */
+async function loadAuditById(auditId) {
+    try {
+        // Show progress
+        hideAllSections();
+        progressSection.style.display = 'flex';
+        progressStep.textContent = 'Loading';
+        progressText.textContent = 'Loading past audit...';
+
+        // Fetch audit data
+        const response = await fetch(`/status/${auditId}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch audit');
+        }
+
+        const data = await response.json();
+
+        if (data.status === 'complete') {
+            // Set current audit ID (for time-travel features)
+            currentAuditId = auditId;
+
+            // Hide progress, render results
+            progressSection.style.display = 'none';
+            await renderResults(data.results);
+
+        } else if (data.status === 'error') {
+            throw new Error(data.error || 'Audit failed');
+        } else {
+            throw new Error('Audit is still processing');
+        }
+
+    } catch (error) {
+        console.error('Error loading audit:', error);
+        progressText.textContent = `Error: ${error.message}`;
+        setTimeout(() => {
+            progressSection.style.display = 'none';
+            loadPastAudits(); // Return to past audits list
+        }, 3000);
+    }
+}
+
+/**
+ * Hide all main sections
+ */
+function hideAllSections() {
+    uploadSection.style.display = 'none';
+    progressSection.style.display = 'none';
+    resultsSection.style.display = 'none';
+    document.getElementById('past-audits-section').style.display = 'none';
+    document.getElementById('upload-header').style.display = 'none';
+}
+
+/**
+ * Show upload page
+ */
+function showUploadPage() {
+    hideAllSections();
+    uploadSection.style.display = 'block';
+    document.getElementById('upload-header').style.display = 'block';
+    setHomeLinkVisibility(false);
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
     // Tab switching
@@ -1329,6 +1488,70 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
     });
+
+    // Navigation event handlers
+    const homeLink = document.getElementById('home-link');
+    if (homeLink) {
+        homeLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            showUploadPage();
+        });
+    }
+
+    const pastAuditsLink = document.getElementById('past-audits-link');
+    if (pastAuditsLink) {
+        pastAuditsLink.addEventListener('click', (e) => {
+            e.preventDefault();
+            loadPastAudits();
+        });
+    }
+
+    // Logout handler
+    const logoutLink = document.getElementById('logout-link');
+    if (logoutLink) {
+        logoutLink.addEventListener('click', async (e) => {
+            e.preventDefault();
+
+            try {
+                const response = await fetch('/api/auth/logout', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+
+                if (response.ok) {
+                    // Clear any local state
+                    currentAuditId = null;
+                    if (pollInterval) {
+                        clearInterval(pollInterval);
+                    }
+
+                    // Redirect to landing page
+                    window.location.href = '/';
+                } else {
+                    console.error('Logout failed:', response.statusText);
+                    alert('Logout failed. Please try again.');
+                }
+            } catch (error) {
+                console.error('Logout error:', error);
+                alert('Network error during logout. Please try again.');
+            }
+        });
+    }
+
+    // Logo click handler - navigate to home
+    const navLogo = document.querySelector('.nav-logo');
+    if (navLogo) {
+        navLogo.style.cursor = 'pointer';  // Visual affordance
+        navLogo.addEventListener('click', (e) => {
+            e.preventDefault();
+            showUploadPage();
+        });
+    }
+
+    // On initial load we're on the home screen, so hide the redundant Home nav item
+    setHomeLinkVisibility(false);
 });
 
 // ============================================================================

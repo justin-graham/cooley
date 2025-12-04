@@ -22,22 +22,24 @@ def get_connection():
     return psycopg2.connect(database_url)
 
 
-def create_audit(audit_id: str) -> None:
+def create_audit(audit_id: str, upload_filename: Optional[str] = None, user_id: Optional[str] = None) -> None:
     """
     Initialize a new audit record with 'processing' status.
 
     Args:
         audit_id: UUID string for the audit
+        upload_filename: Optional original filename of uploaded zip
+        user_id: Optional UUID string of the user who created the audit
     """
     conn = get_connection()
     try:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO audits (id, status, progress)
-                VALUES (%s, %s, %s)
+                INSERT INTO audits (id, status, progress, upload_filename, user_id)
+                VALUES (%s, %s, %s, %s, %s)
                 """,
-                (audit_id, 'processing', 'Starting document extraction...')
+                (audit_id, 'processing', 'Starting document extraction...', upload_filename, user_id)
             )
         conn.commit()
     finally:
@@ -159,6 +161,56 @@ def get_audit(audit_id: str) -> Optional[Dict[str, Any]]:
             cur.execute("SELECT * FROM audits WHERE id = %s", (audit_id,))
             row = cur.fetchone()
             return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_all_audits(user_id: Optional[str] = None) -> list[Dict[str, Any]]:
+    """
+    Retrieve all audits with summary metadata, sorted by most recent first.
+    Returns lightweight list (not full results).
+
+    Args:
+        user_id: Optional UUID string to filter audits by user
+
+    Returns:
+        List of audit dictionaries with summary fields
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if user_id:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        created_at,
+                        status,
+                        company_name,
+                        upload_filename,
+                        COALESCE(jsonb_array_length(documents), 0) as document_count
+                    FROM audits
+                    WHERE user_id = %s
+                    ORDER BY created_at DESC
+                    """,
+                    (user_id,)
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT
+                        id,
+                        created_at,
+                        status,
+                        company_name,
+                        upload_filename,
+                        COALESCE(jsonb_array_length(documents), 0) as document_count
+                    FROM audits
+                    ORDER BY created_at DESC
+                    """
+                )
+            rows = cur.fetchall()
+            return [dict(row) for row in rows]
     finally:
         conn.close()
 
@@ -338,5 +390,103 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
             )
             row = cur.fetchone()
             return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+# ============================================================================
+# User Authentication CRUD Operations
+# ============================================================================
+
+def create_user(username: str, password_hash: str) -> str:
+    """
+    Create a new user and return their UUID.
+
+    Args:
+        username: Unique username
+        password_hash: Bcrypt password hash
+
+    Returns:
+        UUID string of the created user
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                INSERT INTO users (username, password_hash)
+                VALUES (%s, %s)
+                RETURNING id
+                """,
+                (username, password_hash)
+            )
+            user_id = cur.fetchone()[0]
+        conn.commit()
+        return str(user_id)
+    finally:
+        conn.close()
+
+
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    """
+    Get user by username.
+
+    Args:
+        username: Username to search for
+
+    Returns:
+        Dictionary with user data (id, username, password_hash, created_at), or None if not found
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, username, password_hash, created_at FROM users WHERE username = %s",
+                (username,)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get user by ID.
+
+    Args:
+        user_id: UUID string of the user
+
+    Returns:
+        Dictionary with user data (id, username, created_at), or None if not found
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                "SELECT id, username, created_at FROM users WHERE id = %s",
+                (user_id,)
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def create_access_request(email: str) -> None:
+    """
+    Store an access code request email.
+
+    Args:
+        email: Email address requesting access
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "INSERT INTO access_requests (email) VALUES (%s)",
+                (email,)
+            )
+        conn.commit()
     finally:
         conn.close()

@@ -18,9 +18,9 @@ from typing import List, Optional, Dict, Any
 from collections import defaultdict
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
-from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException, Query
+from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException, Query, Depends, Request, Response, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 load_dotenv('.env.local')  # Load local overrides first
 load_dotenv()  # Load .env as fallback
 
-from app import db, utils, processing
+from app import db, utils, processing, auth
 
 # Validate required env vars
 if not os.getenv("ANTHROPIC_API_KEY"):
@@ -59,29 +59,161 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 # ============================================================================
-# ROUTES
+# AUTHENTICATION ROUTES
+# ============================================================================
+
+@app.post("/api/auth/login")
+async def login(
+    response: Response,
+    username: str = Form(...),
+    password: str = Form(...)
+):
+    """
+    Authenticate user with username and password.
+    Sets session cookie on success.
+
+    Args:
+        username: Username
+        password: Plaintext password
+
+    Returns:
+        Success message with username
+
+    Raises:
+        HTTPException: 401 if credentials are invalid
+    """
+    # Get user from database
+    user = db.get_user_by_username(username)
+
+    if not user or not auth.verify_password(password, user['password_hash']):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
+
+    # Create session
+    session_token = auth.create_session(str(user['id']))
+
+    # Set cookie
+    response.set_cookie(
+        key="session_token",
+        value=session_token,
+        httponly=True,
+        max_age=60 * 60 * 24,  # 24 hours
+        samesite="lax"
+    )
+
+    return {"message": "Login successful", "username": user['username']}
+
+
+@app.post("/api/auth/logout")
+async def logout(request: Request, response: Response):
+    """
+    Logout user by deleting session.
+
+    Returns:
+        Success message
+    """
+    session_token = request.cookies.get("session_token")
+    if session_token:
+        auth.delete_session(session_token)
+
+    response.delete_cookie("session_token")
+    return {"message": "Logout successful"}
+
+
+@app.get("/api/auth/me")
+async def get_current_user_info(user_id: str = Depends(auth.get_current_user)):
+    """
+    Get current authenticated user info.
+
+    Returns:
+        User information (id, username)
+
+    Raises:
+        HTTPException: 401 if not authenticated
+    """
+    user = db.get_user_by_id(user_id)
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    return {"user_id": str(user['id']), "username": user['username']}
+
+
+@app.post("/api/access-request")
+async def request_access(email: str = Form(...)):
+    """
+    Store access code request email.
+
+    Args:
+        email: Email address requesting access
+
+    Returns:
+        Success message
+
+    Raises:
+        HTTPException: 400 if email is invalid
+    """
+    # Basic email validation
+    if "@" not in email or "." not in email:
+        raise HTTPException(status_code=400, detail="Invalid email address")
+
+    db.create_access_request(email)
+
+    return {"message": "Access request submitted"}
+
+
+# ============================================================================
+# MAIN APPLICATION ROUTES
 # ============================================================================
 
 @app.get("/")
-async def root():
-    """Serve the main HTML interface."""
+async def root(user_id: Optional[str] = Depends(auth.get_current_user_optional)):
+    """
+    Serve landing page if not authenticated, otherwise redirect to app.
+
+    Returns:
+        Landing page HTML or redirect to /app
+    """
+    if user_id:
+        return RedirectResponse(url="/app")
+    return FileResponse("static/landing.html")
+
+
+@app.get("/app")
+async def app_page(user_id: str = Depends(auth.get_current_user)):
+    """
+    Serve main application (requires authentication).
+
+    Returns:
+        Main application HTML
+
+    Raises:
+        HTTPException: 401 if not authenticated
+    """
     return FileResponse("static/index.html")
 
 
 @app.post("/upload")
 async def upload_audit(
     file: UploadFile,
-    background_tasks: BackgroundTasks
+    background_tasks: BackgroundTasks,
+    user_id: str = Depends(auth.get_current_user)
 ):
     """
     Accept a zip file upload and start background processing.
+    Requires authentication.
 
     Args:
         file: UploadFile object from multipart form
         background_tasks: FastAPI background tasks manager
+        user_id: Authenticated user ID (from session)
 
     Returns:
         JSON with audit_id for status polling
+
+    Raises:
+        HTTPException: 401 if not authenticated, 400 if invalid file
     """
     # Validate file type
     if not file.filename or not file.filename.endswith('.zip'):
@@ -105,9 +237,9 @@ async def upload_audit(
         os.remove(temp_zip_path)
         raise HTTPException(status_code=400, detail=error_msg)
 
-    # Create audit record in database
+    # Create audit record in database with user_id
     try:
-        db.create_audit(audit_id)
+        db.create_audit(audit_id, upload_filename=file.filename, user_id=user_id)
     except Exception as e:
         os.remove(temp_zip_path)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
@@ -119,15 +251,20 @@ async def upload_audit(
 
 
 @app.get("/status/{audit_id}")
-async def get_status(audit_id: str):
+async def get_status(audit_id: str, user_id: str = Depends(auth.get_current_user)):
     """
     Get the status and results of an audit.
+    Requires authentication and audit ownership.
 
     Args:
         audit_id: UUID of the audit
+        user_id: Authenticated user ID (from session)
 
     Returns:
         JSON with status, progress, and results (if complete)
+
+    Raises:
+        HTTPException: 401 if not authenticated, 404 if audit not found, 403 if access denied
     """
     try:
         audit = db.get_audit(audit_id)
@@ -136,6 +273,10 @@ async def get_status(audit_id: str):
 
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
+
+    # Verify audit belongs to requesting user
+    if audit.get('user_id') != user_id:
+        raise HTTPException(status_code=403, detail="Access denied")
 
     response = {
         "status": audit['status'],
@@ -163,6 +304,43 @@ async def get_status(audit_id: str):
 async def health_check():
     """Simple health check endpoint."""
     return {"status": "healthy", "service": "corporate-audit-api"}
+
+
+@app.get("/api/audits")
+async def list_audits(user_id: str = Depends(auth.get_current_user)):
+    """
+    List all past audits with summary metadata for authenticated user.
+    Requires authentication.
+
+    Args:
+        user_id: Authenticated user ID (from session)
+
+    Returns:
+        List of audit summaries: [{
+            id: UUID string,
+            created_at: timestamp,
+            status: str,
+            company_name: str | null,
+            upload_filename: str | null,
+            document_count: int
+        }]
+
+    Raises:
+        HTTPException: 401 if not authenticated
+    """
+    try:
+        # Get audits filtered by user_id
+        audits = db.get_all_audits(user_id=user_id)
+
+        # Convert UUIDs to strings and timestamps to ISO format
+        for audit in audits:
+            audit['id'] = str(audit['id'])
+            if audit['created_at']:
+                audit['created_at'] = audit['created_at'].isoformat()
+
+        return JSONResponse(content=audits)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch audits: {str(e)}")
 
 
 # ============================================================================
@@ -204,16 +382,20 @@ class CapTableState(BaseModel):
 
 
 @app.get("/api/audits/{audit_id}/events", response_model=List[EquityEvent])
-async def get_equity_events(audit_id: str):
+async def get_equity_events(audit_id: str, user_id: str = Depends(auth.get_current_user)):
     """
     Fetch all equity events for an audit (for time-travel cap table).
-    Called once when the audit view loads.
+    Called once when the audit view loads. Requires authentication.
 
     Args:
         audit_id: UUID of the audit
+        user_id: Authenticated user ID (from session)
 
     Returns:
         List of equity events ordered by date
+
+    Raises:
+        HTTPException: 401 if not authenticated, 404 if audit not found
     """
     try:
         # Check if audit exists
@@ -243,18 +425,23 @@ async def get_equity_events(audit_id: str):
 @app.get("/api/audits/{audit_id}/captable", response_model=CapTableState)
 async def get_cap_table_at_time(
     audit_id: str,
+    user_id: str = Depends(auth.get_current_user),
     as_of_date: Optional[str] = Query(None, description="ISO date string (YYYY-MM-DD), defaults to today")
 ):
     """
     Calculate cap table at a specific point in time (time-travel feature).
-    Called repeatedly as user moves the time slider.
+    Called repeatedly as user moves the time slider. Requires authentication.
 
     Args:
         audit_id: UUID of the audit
+        user_id: Authenticated user ID (from session)
         as_of_date: Optional ISO date string (YYYY-MM-DD). If None, uses today's date.
 
     Returns:
         Cap table state with shareholders and ownership percentages
+
+    Raises:
+        HTTPException: 401 if not authenticated, 404 if audit not found
     """
     try:
         # Check if audit exists
@@ -359,16 +546,21 @@ def _get_cached_equity_events(audit_id: str) -> List[Dict[str, Any]]:
 
 
 @app.get("/api/audits/{audit_id}/documents/{doc_id}")
-async def get_document(audit_id: str, doc_id: str):
+async def get_document(audit_id: str, doc_id: str, user_id: str = Depends(auth.get_current_user)):
     """
     Fetch a single document by ID (for document viewer modal).
+    Requires authentication.
 
     Args:
         audit_id: UUID of the audit (for validation)
         doc_id: UUID of the document
+        user_id: Authenticated user ID (from session)
 
     Returns:
         Document data including full text and extracted data
+
+    Raises:
+        HTTPException: 401 if not authenticated, 404 if document not found
     """
     try:
         # Fetch document
