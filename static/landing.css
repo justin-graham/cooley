@@ -6,7 +6,7 @@
     flex-direction: column;
     align-items: center;
     padding: 2.5rem 2rem 0;
-    overflow-x: hidden;
+    overflow-x: visible;
 }
 
 .landing-header {
@@ -19,15 +19,16 @@
 
 .landing-title {
     font-family: var(--font-grotesk);
-    font-size: 2.5rem;
+    font-size: 2.75rem;
     font-weight: 700;
-    color: #555555;
-    line-height: 1.2;
+    color: var(--text);
+    line-height: 1.15;
     white-space: normal;
     text-align: center;
     display: block;
     margin: 0 auto;
     max-width: 960px;
+    letter-spacing: -0.02em;
 }
 
 /* Animation Section */
@@ -125,16 +126,24 @@
     border: 1px solid #111827;
     margin: 8px;
     overflow: hidden;
-    background-color: #FBFAFA;
-    background-image: radial-gradient(circle at 1px 1px, rgba(214, 40, 40, 0.15) 2px, transparent 0);
+    background-color: #E8F1F8;
+    background-image: radial-gradient(circle at 1px 1px, rgba(51, 76, 106, 0.28) 1px, transparent 0);
     background-size: 20px 20px;
     height: 364px;
 }
 
-canvas {
+canvas,
+video {
     display: block;
     width: 100%;
     height: 100%;
+    object-fit: cover;
+}
+
+/* Rotate landing page video 90 degrees and scale to fill width */
+.fig-canvas-wrap video {
+    transform: rotate(90deg) scale(1.8);
+    transform-origin: center center;
 }
 
 /* Auth Form */
@@ -157,21 +166,22 @@ canvas {
 .auth-form input[type="text"],
 .auth-form input[type="password"] {
     width: 100%;
-    padding: 0.875rem 1rem;
+    padding: 1rem 1.25rem;
     font-family: var(--font-sans);
     font-size: 1rem;
-    border: none;
-    border-bottom: 1px solid var(--border);
-    border-radius: 0;
-    background: var(--bg);
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-md);
+    background: var(--bg-pure);
     color: var(--text);
-    transition: border-color 0.15s ease;
+    transition: all var(--transition-fast);
     text-align: center;
+    min-height: var(--touch-target-min);
 }
 
 .auth-form input:focus {
     outline: none;
-    border-bottom-color: var(--accent);
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
 }
 
 .auth-form input::placeholder {
@@ -181,23 +191,34 @@ canvas {
 
 .auth-submit {
     width: 100%;
-    padding: 0.875rem;
+    padding: 1rem 1.5rem;
     font-family: var(--font-grotesk);
     font-size: 1rem;
     font-weight: 600;
-    background: var(--bg);
-    color: var(--text);
+    background: var(--accent);
+    color: white;
     border: none;
-    border-bottom: 1px solid var(--accent);
-    border-radius: 0;
+    border-radius: var(--radius-md);
     cursor: pointer;
-    transition: border-color 0.15s ease, color 0.15s ease;
+    transition: all var(--transition-fast);
+    min-height: var(--touch-target-min);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .auth-submit:hover {
-    background: var(--gray-100);
-    border-bottom-color: var(--accent);
-    color: var(--text);
+    background: #2a3f59;
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
+}
+
+.auth-submit:active {
+    transform: translateY(0);
+}
+
+.auth-submit:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
 .auth-error {
@@ -210,88 +231,205 @@ canvas {
 /* Access Form in Footer */
 .access-form {
     display: flex;
-    gap: 0.5rem;
+    gap: 0.75rem;
     justify-content: center;
     align-items: center;
 }
 
 .access-form input[type="email"] {
     flex: 1;
-    padding: 0.5rem 0.75rem;
+    padding: 0.75rem 1rem;
     font-family: var(--font-sans);
     font-size: 0.875rem;
-    border: 1px solid var(--border);
-    border-radius: 4px;
+    border: 1px solid var(--gray-300);
+    border-radius: var(--radius-md);
     background: var(--bg-pure);
     color: var(--text);
+    min-height: var(--touch-target-min);
+    transition: all var(--transition-fast);
 }
 
 .access-form input:focus {
     outline: none;
     border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--accent-light);
 }
 
 .access-submit {
-    padding: 0.5rem 1rem;
+    padding: 0.75rem 1.5rem;
     font-family: var(--font-grotesk);
     font-size: 0.875rem;
     font-weight: 600;
     background: var(--text);
     color: var(--bg-pure);
     border: none;
-    border-radius: 4px;
+    border-radius: var(--radius-md);
     cursor: pointer;
     white-space: nowrap;
-    transition: opacity 0.15s ease;
+    transition: all var(--transition-fast);
+    min-height: var(--touch-target-min);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 .access-submit:hover {
-    opacity: 0.8;
+    background: var(--gray-800);
+    transform: translateY(-1px);
+    box-shadow: var(--shadow-md);
 }
 
-/* Footer Overrides for Landing Page */
-.landing-page .martian-footer {
-    border-top: 0;
-    border-bottom: none;
-    margin: 0 !important;
-    max-width: 100vw !important;
-    width: 100vw !important;
-    position: relative;
-    left: auto;
-    transform: none;
+.access-submit:active {
+    transform: translateY(0);
 }
 
-.landing-page .footer-copyright {
-    display: none;
+.access-submit:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
 }
 
-.landing-page .martian-footer .martian-column-right {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+/* Full-width overrides for landing page - break out of centered container */
+.landing-page .hero-section {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    margin-right: calc(-50vw + 50%);
+}
+
+/* Landing Page Footer - Full Width with Centered Content */
+.landing-page .site-footer {
+    width: 100vw;
+    margin-left: calc(-50vw + 50%);
+    margin-right: calc(-50vw + 50%);
+    background: var(--bg-pure);
+    border-top: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 1.5rem 0;
+}
+
+.landing-page .footer-container {
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 2rem;
+}
+
+.landing-page .footer-action {
+    flex: 1;
+    max-width: 400px;
 }
 
 .landing-page .access-form {
+    display: flex;
+    gap: 0.75rem;
     width: 100%;
-    max-width: 480px;
 }
 
 /* Responsive */
-@media (max-width: 768px) {
-    .landing-title {
-        font-size: 2rem;
+@media (max-width: 1024px) {
+    .landing-page {
+        padding: 2rem 1.5rem 0;
+    }
+
+    .landing-header {
+        margin: 8vh auto 3rem;
+    }
+
+    .landing-main {
+        gap: 2.5rem;
     }
 
     .fig-canvas-wrap {
-        height: 280px;
+        height: 320px;
+    }
+
+    .landing-page .footer-action {
+        max-width: 100%;
+    }
+}
+
+@media (max-width: 768px) {
+    .landing-page {
+        padding: 1.75rem 1.25rem 0;
+    }
+
+    .landing-header {
+        margin: 3rem auto 2rem;
+    }
+
+    .landing-title {
+        font-size: 1.9rem;
+        line-height: 1.3;
     }
 
     .landing-main {
         grid-template-columns: 1fr;
-        gap: 2rem;
+        gap: 1.75rem;
+        margin-bottom: 6rem;
+        padding: 0;
+    }
+
+    .landing-main .fig-window {
+        width: 100%;
+        max-width: 520px;
+    }
+
+    .fig-canvas-wrap {
+        height: 240px;
     }
 
     .landing-auth {
+        width: 100%;
+        max-width: 520px;
         margin-bottom: 0;
+    }
+
+    .auth-form {
+        gap: 0.75rem;
+    }
+
+    .auth-form input[type="text"],
+    .auth-form input[type="password"] {
+        font-size: 0.95rem;
+        padding: 0.8rem 1rem;
+    }
+
+    .auth-submit {
+        font-size: 0.95rem;
+        padding: 0.85rem;
+    }
+
+    /* Landing footer access form stacks vertically on mobile */
+    .landing-page .access-form {
+        flex-direction: column;
+    }
+
+    .landing-page .access-form input[type="email"],
+    .landing-page .access-submit {
+        width: 100%;
+    }
+}
+
+@media (max-width: 480px) {
+    .landing-page {
+        padding: 1.5rem 1rem 0;
+    }
+
+    .landing-header {
+        margin: 2.5rem auto 1.75rem;
+    }
+
+    .landing-title {
+        font-size: 1.7rem;
+    }
+
+    .landing-main {
+        gap: 1.5rem;
+        margin-bottom: 5rem;
+    }
+
+    .fig-window {
+        border-radius: 4px;
+    }
+
+    .fig-canvas-wrap {
+        height: 200px;
     }
 }

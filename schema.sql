@@ -77,6 +77,8 @@ CREATE TABLE IF NOT EXISTS equity_events (
 
     -- Additional metadata
     details JSONB,  -- Extra fields (price_per_share, valuation_cap, etc.)
+    preview_image TEXT,  -- Base64-encoded PNG screenshot with highlighted numbers
+    summary TEXT,  -- Condensed 20-30 word event summary
     created_at TIMESTAMP DEFAULT NOW()
 );
 

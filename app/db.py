@@ -306,8 +306,8 @@ def insert_equity_events(audit_id: str, events: list[Dict[str, Any]]) -> None:
                     INSERT INTO equity_events (
                         audit_id, event_date, event_type, shareholder_name, share_class, share_delta,
                         source_doc_id, source_snippet, approval_doc_id, approval_snippet,
-                        compliance_status, compliance_note, details
-                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                        compliance_status, compliance_note, details, preview_image, summary
+                    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         audit_id,
@@ -322,7 +322,9 @@ def insert_equity_events(audit_id: str, events: list[Dict[str, Any]]) -> None:
                         event.get('approval_snippet'),
                         event.get('compliance_status', 'VERIFIED'),
                         event.get('compliance_note'),
-                        Json(event.get('details', {}))
+                        Json(event.get('details', {})),
+                        event.get('preview_image'),
+                        event.get('summary')
                     )
                 )
         conn.commit()
@@ -347,7 +349,7 @@ def get_equity_events_by_audit(audit_id: str) -> list[Dict[str, Any]]:
                 """
                 SELECT id, event_date, event_type, shareholder_name, share_class, share_delta,
                        source_doc_id, source_snippet, approval_doc_id, approval_snippet,
-                       compliance_status, compliance_note, details
+                       compliance_status, compliance_note, details, preview_image, summary
                 FROM equity_events
                 WHERE audit_id = %s
                 ORDER BY event_date ASC, created_at ASC
@@ -363,6 +365,76 @@ def get_equity_events_by_audit(audit_id: str) -> list[Dict[str, Any]]:
                 }
                 for row in rows
             ]
+    finally:
+        conn.close()
+
+
+def get_option_grants(audit_id: str, as_of_date: Optional[str] = None) -> list[Dict[str, Any]]:
+    """
+    Retrieve option grants for an audit, optionally filtered by date.
+
+    Args:
+        audit_id: Audit UUID
+        as_of_date: Optional date filter (YYYY-MM-DD)
+
+    Returns:
+        List of option grant dicts with recipient, shares, strike_price, etc.
+    """
+    conn = get_connection()
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            if as_of_date:
+                cur.execute(
+                    """
+                    SELECT
+                        shareholder_name as recipient,
+                        share_delta as shares,
+                        event_date as grant_date,
+                        details->>'strike_price' as strike_price,
+                        details->>'vesting_schedule' as vesting_schedule,
+                        source_doc_id
+                    FROM equity_events
+                    WHERE audit_id = %s
+                      AND event_type = 'option_grant'
+                      AND event_date <= %s
+                    ORDER BY event_date DESC
+                    """,
+                    (audit_id, as_of_date)
+                )
+            else:
+                cur.execute(
+                    """
+                    SELECT
+                        shareholder_name as recipient,
+                        share_delta as shares,
+                        event_date as grant_date,
+                        details->>'strike_price' as strike_price,
+                        details->>'vesting_schedule' as vesting_schedule,
+                        source_doc_id
+                    FROM equity_events
+                    WHERE audit_id = %s
+                      AND event_type = 'option_grant'
+                    ORDER BY event_date DESC
+                    """,
+                    (audit_id,)
+                )
+
+            rows = cur.fetchall()
+
+            # Convert to dict list
+            options = []
+            for row in rows:
+                options.append({
+                    'recipient': row['recipient'],
+                    'shares': int(row['shares']) if row['shares'] else 0,
+                    'grant_date': row['grant_date'],
+                    'strike_price': float(row['strike_price']) if row['strike_price'] else 0.0,
+                    'vesting_schedule': row['vesting_schedule'] or 'Not specified',
+                    'source_doc_id': row['source_doc_id']
+                })
+
+            return options
+
     finally:
         conn.close()
 

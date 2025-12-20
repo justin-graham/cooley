@@ -19,6 +19,7 @@ from collections import defaultdict
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException, Query, Depends, Request, Response, Form
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -363,6 +364,8 @@ class EquityEvent(BaseModel):
     compliance_status: str
     compliance_note: Optional[str]
     details: Dict[str, Any]
+    preview_image: Optional[str]
+    summary: Optional[str]
 
 
 class CapTableRow(BaseModel):
@@ -530,6 +533,51 @@ async def get_cap_table_at_time(
         raise HTTPException(status_code=500, detail=f"Failed to calculate cap table: {str(e)}")
 
 
+@app.get("/api/audits/{audit_id}/options")
+async def get_option_pool(
+    audit_id: str,
+    user_id: str = Depends(auth.get_current_user),
+    as_of_date: Optional[str] = Query(None, description="ISO date string (YYYY-MM-DD)")
+):
+    """
+    Get option pool grants as of a specific date.
+    Returns list of option grants (not included in issued cap table).
+
+    Args:
+        audit_id: UUID of the audit
+        user_id: Authenticated user ID (from session)
+        as_of_date: Optional ISO date string (YYYY-MM-DD)
+
+    Returns:
+        List of option grants with recipient, shares, strike price, etc.
+    """
+    try:
+        # Verify ownership
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        # Parse date filter
+        if as_of_date:
+            try:
+                cutoff_date = datetime.fromisoformat(as_of_date).date()
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD")
+        else:
+            cutoff_date = None
+
+        # Get option grants from database
+        options = db.get_option_grants(audit_id, as_of_date)
+
+        return options
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get option pool: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @lru_cache(maxsize=128)
 def _get_cached_equity_events(audit_id: str) -> List[Dict[str, Any]]:
     """
@@ -586,6 +634,190 @@ async def get_document(audit_id: str, doc_id: str, user_id: str = Depends(auth.g
 
 
 # ============================================================================
+# DOCUMENT DOWNLOADS & PREVIEWS
+# ============================================================================
+
+@app.get("/api/audits/{audit_id}/download/minute-book")
+async def download_minute_book(audit_id: str, user_id: str = Depends(auth.get_current_user)):
+    """
+    Download Minute Book Index as Word document.
+
+    Args:
+        audit_id: UUID of the audit
+        user_id: Authenticated user ID
+
+    Returns:
+        FileResponse with .docx file
+
+    Raises:
+        HTTPException: 403 if access denied, 500 if generation fails
+    """
+    from app import docgen
+    import tempfile
+
+    try:
+        # Verify audit belongs to user
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        if str(audit.get('user_id')) != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Generate Word document
+        docx_bytes = docgen.generate_minute_book(audit_id)
+
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
+        temp_file.write(docx_bytes)
+        temp_file.close()
+
+        # Filename
+        company_name = audit.get('company_name', 'Company').replace(' ', '_')
+        filename = f"{company_name}_Minute_Book_Index.docx"
+
+        return FileResponse(
+            temp_file.name,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            filename=filename
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate minute book: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate minute book: {str(e)}")
+
+
+@app.get("/api/audits/{audit_id}/download/issues")
+async def download_issues_report(audit_id: str, user_id: str = Depends(auth.get_current_user)):
+    """
+    Download Critical Issues Report as Word document.
+
+    Args:
+        audit_id: UUID of the audit
+        user_id: Authenticated user ID
+
+    Returns:
+        FileResponse with .docx file
+
+    Raises:
+        HTTPException: 403 if access denied, 500 if generation fails
+    """
+    from app import docgen
+    import tempfile
+
+    try:
+        # Verify audit belongs to user
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        if str(audit.get('user_id')) != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Generate Word document
+        docx_bytes = docgen.generate_issues_report(audit_id)
+
+        # Create temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
+        temp_file.write(docx_bytes)
+        temp_file.close()
+
+        # Filename
+        company_name = audit.get('company_name', 'Company').replace(' ', '_')
+        filename = f"{company_name}_Critical_Issues_Report.docx"
+
+        return FileResponse(
+            temp_file.name,
+            media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            filename=filename
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate issues report: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate issues report: {str(e)}")
+
+
+@app.get("/api/audits/{audit_id}/preview/minute-book")
+async def preview_minute_book(audit_id: str, user_id: str = Depends(auth.get_current_user)):
+    """
+    Get text preview of Minute Book Index.
+
+    Args:
+        audit_id: UUID of the audit
+        user_id: Authenticated user ID
+
+    Returns:
+        JSON with 'preview' field containing first ~200 words
+
+    Raises:
+        HTTPException: 403 if access denied
+    """
+    from app import docgen
+
+    try:
+        # Verify audit belongs to user
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        if str(audit.get('user_id')) != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Generate preview
+        preview = docgen.generate_minute_book_preview(audit_id)
+
+        return {"preview": preview}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate minute book preview: {e}", exc_info=True)
+        return {"preview": "Preview unavailable"}
+
+
+@app.get("/api/audits/{audit_id}/preview/issues")
+async def preview_issues_report(audit_id: str, user_id: str = Depends(auth.get_current_user)):
+    """
+    Get text preview of Critical Issues Report.
+
+    Args:
+        audit_id: UUID of the audit
+        user_id: Authenticated user ID
+
+    Returns:
+        JSON with 'preview' field containing first ~200 words
+
+    Raises:
+        HTTPException: 403 if access denied
+    """
+    from app import docgen
+
+    try:
+        # Verify audit belongs to user
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        if str(audit.get('user_id')) != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Generate preview
+        preview = docgen.generate_issues_preview(audit_id)
+
+        return {"preview": preview}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate issues preview: {e}", exc_info=True)
+        return {"preview": "Preview unavailable"}
+
+
+# ============================================================================
 # BACKGROUND TASK
 # ============================================================================
 
@@ -600,6 +832,7 @@ def process_documents_task(audit_id: str, zip_path: str):
     """
     import asyncio
     extract_dir = None
+    temp_dir = None
     logger = logging.getLogger(__name__)
 
     try:
@@ -615,6 +848,9 @@ def process_documents_task(audit_id: str, zip_path: str):
         # Unzip files
         file_paths = utils.unzip_file(zip_path)
         extract_dir = os.path.dirname(file_paths[0]) if file_paths else None
+
+        # Temp directory for PDF conversions (preview generation)
+        temp_dir = tempfile.mkdtemp(prefix=f"audit_{audit_id}_")
 
         if not file_paths:
             raise ValueError("No files found in the archive")
@@ -641,9 +877,38 @@ def process_documents_task(audit_id: str, zip_path: str):
                 except Exception as e:
                     logger.error(f"Failed to update progress: {e}")
 
+            # Generate document ID for tracking
+            doc_id = str(uuid.uuid4())
+
             # Parse with timeout to prevent hanging
             logger.info(f"Parsing document {i}/{len(file_paths)}: {filename}")
 
+            # Determine file type and convert to PDF if needed for preview generation
+            file_ext = os.path.splitext(filename)[1].lower()
+            pdf_path = None
+            text_spans = None
+
+            try:
+                # Convert DOCX/XLSX/PPTX to PDF for universal preview support
+                if file_ext in ['.docx', '.xlsx', '.pptx']:
+                    logger.info(f"Converting {filename} to PDF for preview generation")
+                    pdf_path = utils.convert_to_pdf(file_path, temp_dir)
+                    logger.info(f"Converted {filename} to PDF: {pdf_path}")
+                elif file_ext == '.pdf':
+                    pdf_path = file_path
+
+                # Extract bbox data for PDF files (for inline previews)
+                if pdf_path:
+                    logger.info(f"Extracting bbox data from {filename}")
+                    bbox_result = utils.parse_pdf_with_bboxes(pdf_path)
+                    text_spans = bbox_result['text_spans']
+                    logger.info(f"Extracted {len(text_spans)} text spans from {filename}")
+
+            except Exception as e:
+                logger.warning(f"Failed to convert/extract bbox for {filename}: {e}")
+                # Continue with regular parsing even if PDF conversion/bbox extraction fails
+
+            # Regular document parsing (for AI text extraction)
             executor = ThreadPoolExecutor(max_workers=1)
             future = executor.submit(utils.parse_document, file_path)
             try:
@@ -653,7 +918,6 @@ def process_documents_task(audit_id: str, zip_path: str):
                 logger.error(f"Timeout parsing {filename} after 20 seconds")
 
                 # Try fallback extraction for PDFs
-                file_ext = os.path.splitext(filename)[1].lower()
                 if file_ext == '.pdf':
                     logger.info(f"Attempting fallback extraction for {filename}")
                     try:
@@ -695,6 +959,13 @@ def process_documents_task(audit_id: str, zip_path: str):
                 # Don't wait for stuck threads to finish
                 executor.shutdown(wait=False, cancel_futures=True)
 
+            # Add doc_id, pdf_path, and text_spans to document dict
+            doc['id'] = doc_id
+            if pdf_path:
+                doc['pdf_path'] = pdf_path
+            if text_spans:
+                doc['text_spans'] = text_spans
+
             documents.append(doc)
 
         if not documents:
@@ -725,6 +996,8 @@ def process_documents_task(audit_id: str, zip_path: str):
                 os.remove(zip_path)
             if extract_dir and os.path.exists(extract_dir):
                 shutil.rmtree(extract_dir)
+            if temp_dir and os.path.exists(temp_dir):
+                shutil.rmtree(temp_dir)
         except Exception:
             pass  # Ignore cleanup errors
 

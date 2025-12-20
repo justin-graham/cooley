@@ -383,6 +383,7 @@ async function renderResults(results) {
 
     // Render two-column hero header
     renderCompanyHeader(results);
+    initHeroScrollMotion();
 
     // Normalize compliance issues source
     const complianceArray = results.compliance_issues || results.issues || [];
@@ -431,6 +432,9 @@ async function renderResults(results) {
             '<p style="color: var(--accent); padding: 1rem;">Unable to load event stream. Please refresh the page.</p>';
     }
 
+    // Load download previews
+    loadDownloadPreviews(currentAuditId);
+
     // Scroll to results
     resultsSection.scrollIntoView({ behavior: 'smooth' });
 }
@@ -460,11 +464,11 @@ function renderCompanyHeader(results) {
     const lastDate = dates.length > 1 ? formatDate(dates[dates.length - 1]) : '';
     const dateRange = lastDate ? `${firstDate} - ${lastDate}` : firstDate;
 
-    // Render left column: Company info and stats
+    // Render left column: Company info and stats with scroll-reveal classes
     const leftHTML = `
-        <h1 class="company-name">${results.company_name || 'Unknown Company'}</h1>
-        <p class="company-period">${dateRange}</p>
-        <div class="company-stats">
+        <h1 class="company-name scroll-reveal">${results.company_name || 'Unknown Company'}</h1>
+        <p class="company-period scroll-reveal" data-delay="1">${dateRange}</p>
+        <div class="company-stats scroll-reveal" data-delay="1">
             <div class="company-stat">
                 <span class="company-stat-label">Documents</span>
                 <span class="company-stat-value">${docCount}</span>
@@ -482,8 +486,10 @@ function renderCompanyHeader(results) {
 
     leftContainer.innerHTML = leftHTML;
 
-    // Initialize canvas animation on the hero-canvas element
-    initHeroCanvas();
+    // Re-initialize scroll reveal for dynamically added elements
+    if (typeof initScrollReveal === 'function') {
+        initScrollReveal();
+    }
 }
 
 /**
@@ -551,11 +557,11 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
 
     const complianceItem = `
         <div class="accordion-item">
-            <div class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="handleAccordionKeydown(event)">
                 <h3 class="accordion-title">Compliance Issues</h3>
-                <span class="accordion-toggle">+</span>
+                <span class="accordion-toggle" aria-hidden="true">+</span>
             </div>
-            <div class="accordion-content">
+            <div class="accordion-content" role="region" aria-hidden="true">
                 <div class="accordion-body">
                     ${complianceIssues.length
                         ? complianceIssues.map(issue => {
@@ -573,11 +579,11 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
 
     const failedItem = `
         <div class="accordion-item">
-            <div class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="handleAccordionKeydown(event)">
                 <h3 class="accordion-title">Failed Documents</h3>
-                <span class="accordion-toggle">+</span>
+                <span class="accordion-toggle" aria-hidden="true">+</span>
             </div>
-            <div class="accordion-content">
+            <div class="accordion-content" role="region" aria-hidden="true">
                 <div class="accordion-body">
                     ${failedDocuments.length
                         ? failedDocuments.map(doc => `<div>${doc.filename || doc}</div>`).join('')
@@ -590,16 +596,16 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
     // Render accordion items
     const docItems = sortedTypes.map(([type, data]) => `
         <div class="accordion-item">
-            <div class="accordion-header" onclick="toggleAccordion(this)">
+            <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="handleAccordionKeydown(event)">
                 <h3 class="accordion-title">${type}</h3>
-                <span class="accordion-toggle">+</span>
+                <span class="accordion-toggle" aria-hidden="true">+</span>
             </div>
-            <div class="accordion-content">
+            <div class="accordion-content" role="region" aria-hidden="true">
                 <div class="accordion-body">
                     ${(data.docs || []).map(doc => {
                         const docId = doc.document_id || doc.id || '';
                         const name = doc.filename || 'Untitled';
-                        return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document">${name}</div>`;
+                        return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document" role="button" tabindex="0">${name}</div>`;
                     }).join('')}
                 </div>
             </div>
@@ -625,20 +631,37 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
 }
 
 /**
- * Toggle accordion item open/closed
+ * Toggle accordion item open/closed with accessibility support
  */
 function toggleAccordion(headerElement) {
     const item = headerElement.parentElement;
     const wasActive = item.classList.contains('active');
+    const content = item.querySelector('.accordion-content');
 
-    // Close all accordion items
+    // Close all accordion items and update ARIA
     document.querySelectorAll('.accordion-item').forEach(el => {
         el.classList.remove('active');
+        const header = el.querySelector('.accordion-header');
+        const contentEl = el.querySelector('.accordion-content');
+        if (header) header.setAttribute('aria-expanded', 'false');
+        if (contentEl) contentEl.setAttribute('aria-hidden', 'true');
     });
 
     // Toggle current item (if it wasn't already open)
     if (!wasActive) {
         item.classList.add('active');
+        headerElement.setAttribute('aria-expanded', 'true');
+        if (content) content.setAttribute('aria-hidden', 'false');
+    }
+}
+
+/**
+ * Handle keyboard events for accordion accessibility
+ */
+function handleAccordionKeydown(event) {
+    if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        toggleAccordion(event.target);
     }
 }
 
@@ -821,7 +844,11 @@ const AuditViewState = {
     dateRange: { min: null, max: null },
     currentDate: null,  // Controlled by slider
     currentCapTable: null,
-    previousCapTable: null  // For detecting changes
+    previousCapTable: null,  // For detecting changes
+
+    // Tab view state
+    currentView: 'issued',  // 'issued', 'fully-diluted', 'options'
+    optionPoolData: null    // Cache option pool data
 };
 
 // ============================================================================
@@ -915,10 +942,36 @@ async function initTimeTravel(auditId) {
         // Initial render of cap table and events (select latest event)
         await selectTimelineEvent(latestEvent.id);
 
+        // Initialize tab controls
+        initCapTableTabs();
+
     } catch (error) {
         console.error('Failed to initialize time travel:', error);
         alert(`Failed to load audit data: ${error.message}`);
     }
+}
+
+/**
+ * Initialize tab controls for cap table views
+ */
+function initCapTableTabs() {
+    const tabs = document.querySelectorAll('.cap-table-tab');
+
+    tabs.forEach(tab => {
+        tab.addEventListener('click', async () => {
+            // Remove active from all tabs
+            tabs.forEach(t => t.classList.remove('active'));
+
+            // Add active to clicked tab
+            tab.classList.add('active');
+
+            // Update view state
+            AuditViewState.currentView = tab.dataset.view;
+
+            // Re-render cap table with new view
+            await renderCapTable();
+        });
+    });
 }
 
 /**
@@ -949,7 +1002,7 @@ function renderHorizontalTimeline() {
                 const positionPercent = padding + (events.length > 1
                     ? (index / (events.length - 1)) * usableWidth
                     : usableWidth / 2);
-                const color = '#D62828';
+                const color = '#334C6A';
 
                 return `
                     <div class="timeline-node-wrapper" style="left: ${positionPercent}%;" data-event-id="${event.id}">
@@ -1023,127 +1076,290 @@ async function selectTimelineEvent(eventId) {
 }
 
 /**
- * Render cap table (fetches from API)
+ * Render cap table (fetches from API, view-aware)
  */
 async function renderCapTable() {
     const dateStr = new Date(AuditViewState.currentDate).toISOString().split('T')[0];
+    const container = document.getElementById('cap-table-container');
+    const noteContainer = document.getElementById('cap-table-note');
 
     try {
-        let newCapTable;
+        let capTableData;
+        let optionsData = [];
 
-        console.log('[RENDER CAP TABLE] Checking demo mode:', {
-            isDemoModeActive,
-            hasDemoData: !!demoDataCache
-        });
-
-        // Demo mode: Use cached cap table data
+        // Fetch issued & outstanding cap table
         if (isDemoModeActive && demoDataCache) {
-            newCapTable = convertDemoCapTable(demoDataCache.cap_table, dateStr);
+            capTableData = convertDemoCapTable(demoDataCache.cap_table, dateStr);
+            // TODO: Add demo options data
         } else {
-            // Production mode: Fetch from API
             const response = await fetch(`/api/audits/${AuditViewState.auditId}/captable?as_of_date=${dateStr}`);
-            if (!response.ok) {
-                throw new Error(`API error: ${response.statusText}`);
+            if (!response.ok) throw new Error(`API error: ${response.statusText}`);
+            capTableData = await response.json();
+
+            // Fetch option pool data
+            const optionsResponse = await fetch(`/api/audits/${AuditViewState.auditId}/options?as_of_date=${dateStr}`);
+            if (optionsResponse.ok) {
+                optionsData = await optionsResponse.json();
             }
-            newCapTable = await response.json();
         }
 
-        // Detect changed shareholders
-        const changedShareholders = new Set();
-        if (AuditViewState.previousCapTable) {
-            const prevMap = new Map(
-                AuditViewState.previousCapTable.shareholders.map(sh => [sh.shareholder, sh])
-            );
-            newCapTable.shareholders.forEach(sh => {
-                const prev = prevMap.get(sh.shareholder);
-                if (!prev || prev.shares !== sh.shares) {
-                    changedShareholders.add(sh.shareholder);
-                }
-            });
+        // Store for view switching
+        AuditViewState.currentCapTable = capTableData;
+        AuditViewState.optionPoolData = optionsData;
+
+        // Render based on current view
+        switch (AuditViewState.currentView) {
+            case 'issued':
+                renderIssuedView(capTableData, container, noteContainer);
+                break;
+            case 'fully-diluted':
+                renderFullyDilutedView(capTableData, optionsData, container, noteContainer);
+                break;
+            case 'options':
+                renderOptionsView(optionsData, container, noteContainer);
+                break;
         }
-
-        AuditViewState.previousCapTable = AuditViewState.currentCapTable;
-        AuditViewState.currentCapTable = newCapTable;
-
-        const container = document.getElementById('cap-table-container');
-        container.innerHTML = ''; // Clear
-
-        if (AuditViewState.currentCapTable.shareholders.length === 0) {
-            container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem; margin-top: 1rem;">No shareholders at this date.</p>';
-            return;
-        }
-
-        // Build table
-        const table = document.createElement('table');
-        table.className = 'cap-table';
-
-        // Create tbody separately to add event listeners
-        const tbody = document.createElement('tbody');
-
-        AuditViewState.currentCapTable.shareholders.forEach(sh => {
-            const row = document.createElement('tr');
-            row.className = 'cap-table-row';
-            row.setAttribute('data-shareholder', sh.shareholder);
-
-            const color = getShareholderColor(sh.shareholder);
-            const isChanged = changedShareholders.has(sh.shareholder);
-
-            if (isChanged) {
-                row.classList.add('changed');
-            }
-
-            row.innerHTML = `
-                <td>
-                    <span style="color: ${color}; font-weight: 600;">${sh.shareholder}</span>
-                    ${sh.compliance_issues.length > 0 ?
-                        `<span style="color: var(--accent); font-size: 0.625rem; margin-left: 4px;" title="${sh.compliance_issues.join('; ')}">⚠</span>`
-                        : ''}
-                </td>
-                <td>${sh.share_class}</td>
-                <td>${formatNumber(sh.shares)}</td>
-                <td class="ownership-number">${formatPercent(sh.ownership_pct)}</td>
-            `;
-
-            // Add hover listeners
-            row.addEventListener('mouseenter', () => highlightShareholder(sh.shareholder, 'enter'));
-            row.addEventListener('mouseleave', () => highlightShareholder(sh.shareholder, 'leave'));
-
-            tbody.appendChild(row);
-        });
-
-        // Create thead
-        const thead = document.createElement('thead');
-        thead.innerHTML = `
-            <tr>
-                <th>Shareholder</th>
-                <th>Class</th>
-                <th>Shares</th>
-                <th>Ownership %</th>
-            </tr>
-        `;
-
-        // Create tfoot
-        const tfoot = document.createElement('tfoot');
-        tfoot.innerHTML = `
-            <tr>
-                <td colspan="2">Total</td>
-                <td>${formatNumber(AuditViewState.currentCapTable.total_shares)}</td>
-                <td>100.00%</td>
-            </tr>
-        `;
-
-        // Assemble table (append elements to preserve event listeners)
-        table.appendChild(thead);
-        table.appendChild(tbody);
-        table.appendChild(tfoot);
-
-        container.appendChild(table);
 
     } catch (error) {
         console.error('Failed to render cap table:', error);
-        document.getElementById('cap-table-container').innerHTML =
-            `<p style="color: var(--accent); font-size: 0.875rem;">Error loading cap table: ${error.message}</p>`;
+        container.innerHTML = `<p style="color: var(--accent); font-size: 0.875rem;">Error loading cap table: ${error.message}</p>`;
     }
+}
+
+/**
+ * Render Issued & Outstanding view
+ */
+function renderIssuedView(capTableData, container, noteContainer) {
+    noteContainer.textContent = 'Shows current ownership. Options are excluded until exercised.';
+
+    if (capTableData.shareholders.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">No shareholders at this date.</p>';
+        return;
+    }
+
+    const table = document.createElement('table');
+    table.className = 'cap-table';
+
+    // Build tbody
+    const tbody = document.createElement('tbody');
+
+    capTableData.shareholders.forEach(sh => {
+        const row = document.createElement('tr');
+        row.className = 'cap-table-row';
+        row.setAttribute('data-shareholder', sh.shareholder);
+
+        const color = getShareholderColor(sh.shareholder);
+
+        row.innerHTML = `
+            <td>
+                <span class="shareholder-dot" style="background-color: ${color};"></span>
+                ${sh.shareholder}
+                ${sh.compliance_issues && sh.compliance_issues.length > 0 ?
+                    `<span style="color: var(--accent); font-size: 0.625rem; margin-left: 4px;" title="${sh.compliance_issues.join('; ')}">⚠</span>`
+                    : ''}
+            </td>
+            <td>${sh.share_class || 'Common'}</td>
+            <td class="monospace">${formatNumber(sh.shares)}</td>
+            <td class="monospace ownership-number">${formatPercent(sh.ownership_pct)}</td>
+        `;
+
+        tbody.appendChild(row);
+    });
+
+    // Header
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th>Shareholder</th>
+            <th>Class</th>
+            <th>Shares</th>
+            <th>Ownership</th>
+        </tr>
+    `;
+
+    // Footer
+    const tfoot = document.createElement('tfoot');
+    tfoot.innerHTML = `
+        <tr>
+            <td colspan="2">Total</td>
+            <td>${formatNumber(capTableData.total_shares)}</td>
+            <td>100.00%</td>
+        </tr>
+    `;
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    table.appendChild(tfoot);
+    container.innerHTML = '';
+    container.appendChild(table);
+}
+
+/**
+ * Render Fully Diluted view
+ */
+function renderFullyDilutedView(capTableData, optionsData, container, noteContainer) {
+    noteContainer.textContent = 'Shows ownership if all options and convertibles are exercised.';
+
+    // Combine issued shares + options
+    const shareholderMap = new Map();
+
+    // Add issued shares
+    capTableData.shareholders.forEach(sh => {
+        shareholderMap.set(sh.shareholder, {
+            shareholder: sh.shareholder,
+            share_class: sh.share_class,
+            issued_shares: sh.shares,
+            option_shares: 0,
+            total_shares: sh.shares
+        });
+    });
+
+    // Add option shares
+    optionsData.forEach(opt => {
+        const existing = shareholderMap.get(opt.recipient) || {
+            shareholder: opt.recipient,
+            share_class: 'Common',
+            issued_shares: 0,
+            option_shares: 0,
+            total_shares: 0
+        };
+
+        existing.option_shares += opt.shares;
+        existing.total_shares = existing.issued_shares + existing.option_shares;
+        shareholderMap.set(opt.recipient, existing);
+    });
+
+    // Calculate total and percentages
+    const allShareholders = Array.from(shareholderMap.values());
+    const totalShares = allShareholders.reduce((sum, sh) => sum + sh.total_shares, 0);
+
+    allShareholders.forEach(sh => {
+        sh.ownership_pct = (sh.total_shares / totalShares * 100);
+    });
+
+    // Sort by ownership desc
+    allShareholders.sort((a, b) => b.total_shares - a.total_shares);
+
+    // Render table
+    const table = document.createElement('table');
+    table.className = 'cap-table';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th>Shareholder</th>
+            <th>Issued</th>
+            <th>Options</th>
+            <th>Total</th>
+            <th>%</th>
+        </tr>
+    `;
+
+    const tbody = document.createElement('tbody');
+    allShareholders.forEach(sh => {
+        const row = document.createElement('tr');
+        row.className = 'cap-table-row';
+        row.setAttribute('data-shareholder', sh.shareholder);
+
+        const color = getShareholderColor(sh.shareholder);
+
+        row.innerHTML = `
+            <td>
+                <span class="shareholder-dot" style="background-color: ${color};"></span>
+                ${sh.shareholder}
+            </td>
+            <td class="monospace">${formatNumber(sh.issued_shares)}</td>
+            <td class="monospace">${formatNumber(sh.option_shares)}</td>
+            <td class="monospace"><strong>${formatNumber(sh.total_shares)}</strong></td>
+            <td class="monospace">${sh.ownership_pct.toFixed(2)}%</td>
+        `;
+
+        tbody.appendChild(row);
+    });
+
+    const tfoot = document.createElement('tfoot');
+    tfoot.innerHTML = `
+        <tr>
+            <td>Total</td>
+            <td>${formatNumber(capTableData.total_shares)}</td>
+            <td>${formatNumber(optionsData.reduce((sum, opt) => sum + opt.shares, 0))}</td>
+            <td>${formatNumber(totalShares)}</td>
+            <td>100.00%</td>
+        </tr>
+    `;
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    table.appendChild(tfoot);
+    container.innerHTML = '';
+    container.appendChild(table);
+}
+
+/**
+ * Render Option Pool view
+ */
+function renderOptionsView(optionsData, container, noteContainer) {
+    noteContainer.textContent = 'Shows option grants and unallocated option pool.';
+
+    if (optionsData.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-secondary); font-size: 0.875rem;">No option grants found.</p>';
+        return;
+    }
+
+    // Sort by grant date
+    optionsData.sort((a, b) => new Date(b.grant_date) - new Date(a.grant_date));
+
+    const table = document.createElement('table');
+    table.className = 'cap-table';
+
+    const thead = document.createElement('thead');
+    thead.innerHTML = `
+        <tr>
+            <th>Recipient</th>
+            <th>Grant Date</th>
+            <th>Shares</th>
+            <th>Strike Price</th>
+            <th>Vesting</th>
+        </tr>
+    `;
+
+    const tbody = document.createElement('tbody');
+    optionsData.forEach(opt => {
+        const row = document.createElement('tr');
+        row.className = 'cap-table-row option-grant';
+
+        const color = getShareholderColor(opt.recipient);
+
+        row.innerHTML = `
+            <td>
+                <span class="shareholder-dot" style="background-color: ${color};"></span>
+                ${opt.recipient}
+            </td>
+            <td class="monospace">${opt.grant_date || 'N/A'}</td>
+            <td class="monospace">${formatNumber(opt.shares)}</td>
+            <td class="monospace">$${(opt.strike_price || 0).toFixed(4)}</td>
+            <td style="font-size: 0.75rem;">${opt.vesting_schedule || 'Not specified'}</td>
+        `;
+
+        tbody.appendChild(row);
+    });
+
+    const totalOptions = optionsData.reduce((sum, opt) => sum + opt.shares, 0);
+
+    const tfoot = document.createElement('tfoot');
+    tfoot.innerHTML = `
+        <tr>
+            <td colspan="2">Total Granted</td>
+            <td>${formatNumber(totalOptions)}</td>
+            <td colspan="2"></td>
+        </tr>
+    `;
+
+    table.appendChild(thead);
+    table.appendChild(tbody);
+    table.appendChild(tfoot);
+    container.innerHTML = '';
+    container.appendChild(table);
 }
 
 /**
@@ -1199,17 +1415,51 @@ function renderEventStream() {
             card.setAttribute('data-shareholder', event.shareholder_name);
         }
 
+        const focusY = event.details && typeof event.details.preview_focus_y === 'number'
+            ? event.details.preview_focus_y
+            : null;
+        const previewStyle = focusY !== null ? `object-position: 50% ${focusY * 100}%;` : '';
+
         card.innerHTML = `
             <div class="event-card-header">
                 <span class="event-type">${eventTypeDisplay}</span>
                 <span class="event-date">${eventDateStr}</span>
             </div>
-            ${detailsText ? `<div class="event-details" style="${shareholderColor ? `border-left: 5px solid ${shareholderColor}; padding-left: 8px;` : ''}">${detailsText}</div>` : ''}
-            ${event.source_snippet ? `<div class="source-quote">"${event.source_snippet}"</div>` : ''}
+
+            ${event.summary ? `
+                <div class="event-summary">${event.summary}</div>
+            ` : (detailsText ? `<div class="event-details" style="${shareholderColor ? `border-left: 5px solid ${shareholderColor}; padding-left: 8px;` : ''}">${detailsText}</div>` : '')}
+
+            ${event.preview_image ? `
+                <div class="event-preview" data-doc-id="${event.source_doc_id}" title="Click to view full document">
+                    <img src="${event.preview_image}"
+                         alt="Document preview"
+                         class="event-preview-image"
+                         style="${previewStyle}" />
+                </div>
+            ` : ''}
+
+            ${event.share_delta !== undefined && event.share_delta !== 0 ? `
+                <div class="event-metadata">
+                    <div class="event-amount">
+                        <span class="label">Shares:</span>
+                        <span class="value">${event.share_delta > 0 ? '+' : ''}${formatNumber(event.share_delta)}</span>
+                    </div>
+                    ${event.details && event.details.price_per_share ? `
+                        <div class="event-price">
+                            <span class="label">Price:</span>
+                            <span class="value">$${parseFloat(event.details.price_per_share).toFixed(4)}</span>
+                        </div>
+                    ` : ''}
+                </div>
+            ` : ''}
+
+            ${!event.summary && event.source_snippet ? `<div class="source-quote">"${event.source_snippet}"</div>` : ''}
             ${event.compliance_note ? `<div class="compliance-note">${event.compliance_note}</div>` : ''}
-            <div class="doc-reference">
-                ${event.source_doc_id ? `<span class="doc-link" data-doc-id="${event.source_doc_id}" data-snippet="${event.source_snippet || ''}" title="View source document">Source: ${event.source_doc_id.substring(0, 8)}...</span>` : ''}
-                ${event.approval_doc_id ? ` <span class="doc-link" data-doc-id="${event.approval_doc_id}" data-snippet="${event.approval_snippet || ''}" title="View approval document">Approval: ${event.approval_doc_id.substring(0, 8)}...</span>` : ''}
+
+            <div class="event-links">
+                ${event.source_doc_id ? `<a href="#" class="event-link" data-doc-id="${event.source_doc_id}" data-snippet="${event.source_snippet || ''}" title="View source document">Source Document</a>` : ''}
+                ${event.approval_doc_id ? `<a href="#" class="event-link" data-doc-id="${event.approval_doc_id}" data-snippet="${event.approval_snippet || ''}" title="View approval document">Board Approval</a>` : ''}
             </div>
         `;
 
@@ -1222,15 +1472,30 @@ function renderEventStream() {
         fragment.appendChild(card);
 
         // Add click handlers to document links
-        const docLinks = card.querySelectorAll('.doc-link');
-        docLinks.forEach(link => {
+        const eventLinks = card.querySelectorAll('.event-link');
+        eventLinks.forEach(link => {
             link.addEventListener('click', (e) => {
+                e.preventDefault();
                 e.stopPropagation();
                 const docId = link.getAttribute('data-doc-id');
                 const snippet = link.getAttribute('data-snippet');
-                showDocumentModal(AuditViewState.auditId, docId, snippet || null);
+                if (docId) {
+                    showDocumentModal(AuditViewState.auditId, docId, snippet || null, event.preview_image || null);
+                }
             });
         });
+
+        // Add click handler to preview image to expand fullscreen
+        const eventPreview = card.querySelector('.event-preview');
+        if (eventPreview) {
+            eventPreview.addEventListener('click', (e) => {
+                e.stopPropagation();
+                const docId = eventPreview.getAttribute('data-doc-id');
+                if (docId) {
+                    showDocumentModal(AuditViewState.auditId, docId, null, event.preview_image || null);
+                }
+            });
+        }
     });
 
     container.appendChild(fragment);
@@ -1564,7 +1829,7 @@ document.addEventListener('DOMContentLoaded', () => {
  * @param {string} docId - UUID of the document
  * @param {string} [snippetToHighlight] - Optional text snippet to highlight
  */
-async function showDocumentModal(auditId, docId, snippetToHighlight = null) {
+async function showDocumentModal(auditId, docId, snippetToHighlight = null, previewImage = null) {
     const modal = document.getElementById('document-modal');
     const modalFilename = document.getElementById('modal-filename');
     const modalClassification = document.getElementById('modal-classification');
@@ -1613,28 +1878,36 @@ async function showDocumentModal(auditId, docId, snippetToHighlight = null) {
         modalFilename.textContent = doc.filename || 'Document';
         modalClassification.textContent = doc.classification || 'Unknown Document Type';
 
-        let fullText = doc.full_text || 'No text content available';
-
-        // Highlight snippet if provided
-        if (snippetToHighlight && fullText.includes(snippetToHighlight)) {
-            fullText = fullText.replace(
-                snippetToHighlight,
-                `<mark>${escapeHtml(snippetToHighlight)}</mark>`
-            );
-            modalContent.innerHTML = escapeHtml(fullText).replace(
-                `&lt;mark&gt;${escapeHtml(snippetToHighlight)}&lt;/mark&gt;`,
-                `<mark>${escapeHtml(snippetToHighlight)}</mark>`
-            );
-
-            // Scroll to highlighted snippet after a brief delay
-            setTimeout(() => {
-                const mark = modalContent.querySelector('mark');
-                if (mark) {
-                    mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-            }, 100);
+        // If we have a preview image, show that instead of raw text for a more realistic doc view
+        if (previewImage) {
+            modalContent.innerHTML = `
+                <img src="${previewImage}" alt="Document preview"
+                     style="width: 100%; max-height: 70vh; object-fit: contain; background: var(--gray-50);" />
+            `;
         } else {
-            modalContent.textContent = fullText;
+            let fullText = doc.full_text || 'No text content available';
+
+            // Highlight snippet if provided
+            if (snippetToHighlight && fullText.includes(snippetToHighlight)) {
+                fullText = fullText.replace(
+                    snippetToHighlight,
+                    `<mark>${escapeHtml(snippetToHighlight)}</mark>`
+                );
+                modalContent.innerHTML = escapeHtml(fullText).replace(
+                    `&lt;mark&gt;${escapeHtml(snippetToHighlight)}&lt;/mark&gt;`,
+                    `<mark>${escapeHtml(snippetToHighlight)}</mark>`
+                );
+
+                // Scroll to highlighted snippet after a brief delay
+                setTimeout(() => {
+                    const mark = modalContent.querySelector('mark');
+                    if (mark) {
+                        mark.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }, 100);
+            } else {
+                modalContent.textContent = fullText;
+            }
         }
 
     } catch (error) {
@@ -1773,107 +2046,261 @@ function initCompanyHeaderAnimation() {
 
 /**
  * Initialize hero canvas animation (Martian Grid version)
+ * Commented out - replaced with video element
  */
-function initHeroCanvas() {
-    const canvas = document.getElementById("hero-canvas");
-    if (!canvas) return;
+// function initHeroCanvas() {
+//     const canvas = document.getElementById("hero-canvas");
+//     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
-    const wrap = canvas.parentElement;
-    const COLORS = ["#000000", "#D62828", "#F37022", "#0ABAB5"];
+//     const ctx = canvas.getContext("2d");
+//     const wrap = canvas.parentElement;
+//     const COLORS = ["#000000", "#D62828", "#F37022", "#0ABAB5"];
 
-    function resizeCanvas() {
-        const rect = wrap.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
+//     function resizeCanvas() {
+//         const rect = wrap.getBoundingClientRect();
+//         const dpr = window.devicePixelRatio || 1;
+//         canvas.width = rect.width * dpr;
+//         canvas.height = rect.height * dpr;
+//         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+//     }
 
-    function drawRect(cx, cy, w, h, angle) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle);
-        ctx.strokeRect(-w / 2, -h / 2, w, h);
-        ctx.restore();
-    }
+//     function drawRect(cx, cy, w, h, angle) {
+//         ctx.save();
+//         ctx.translate(cx, cy);
+//         ctx.rotate(angle);
+//         ctx.strokeRect(-w / 2, -h / 2, w, h);
+//         ctx.restore();
+//     }
 
-    function draw(time) {
-        const t = time * 0.001;
+//     function draw(time) {
+//         const t = time * 0.001;
 
-        const { width, height } = canvas.getBoundingClientRect();
-        ctx.clearRect(0, 0, width, height);
+//         const { width, height } = canvas.getBoundingClientRect();
+//         ctx.clearRect(0, 0, width, height);
 
-        ctx.lineWidth = 1;
+//         ctx.lineWidth = 1;
 
-        const baseX = width * 0.1;
-        const baseY = height * 1.05;
-        const apexX = width * 0.5;
-        const apexY = height * 0.55;
+//         const baseX = width * 0.1;
+//         const baseY = height * 1.05;
+//         const apexX = width * 0.5;
+//         const apexY = height * 0.55;
 
-        // Mountain fan of large rectangles (with jitter and color)
-        const bigCount = 26;
-        for (let i = 0; i < bigCount; i++) {
-            const alpha = i / (bigCount - 1);
-            const jitter = (i * 13.37) % 1;
-            const offset = (jitter - 0.5) * 6;
-            const cx = baseX + (apexX - baseX) * alpha + offset;
-            const cy = baseY + (apexY - baseY) * alpha;
+//         // Mountain fan of large rectangles (with jitter and color)
+//         const bigCount = 26;
+//         for (let i = 0; i < bigCount; i++) {
+//             const alpha = i / (bigCount - 1);
+//             const jitter = (i * 13.37) % 1;
+//             const offset = (jitter - 0.5) * 6;
+//             const cx = baseX + (apexX - baseX) * alpha + offset;
+//             const cy = baseY + (apexY - baseY) * alpha;
 
-            const baseSize = 170;
-            const size = baseSize * (0.55 + alpha * 0.9);
-            const wobble = Math.sin(t * 0.6 + i * 0.4) * 0.15;
-            const tilt = -0.9 + alpha * 1.4 + wobble;
+//             const baseSize = 170;
+//             const size = baseSize * (0.55 + alpha * 0.9);
+//             const wobble = Math.sin(t * 0.6 + i * 0.4) * 0.15;
+//             const tilt = -0.9 + alpha * 1.4 + wobble;
 
-            ctx.save();
-            ctx.globalAlpha = 0.22;
-            ctx.strokeStyle = COLORS[i % COLORS.length];
-            drawRect(cx, cy, size, size, tilt);
-            ctx.restore();
+//             ctx.save();
+//             ctx.globalAlpha = 0.22;
+//             ctx.strokeStyle = COLORS[i % COLORS.length];
+//             drawRect(cx, cy, size, size, tilt);
+//             ctx.restore();
+//         }
+
+//         // Mid-chain of medium rectangles
+//         const midCount = 22;
+//         for (let i = 0; i < midCount; i++) {
+//             const alpha = i / (midCount - 1);
+//             const cx = apexX + Math.sin(alpha * 3.0 + t * 0.7) * 10;
+//             const cy = apexY - alpha * height * 0.22;
+
+//             const size = 60 * (1 - alpha * 0.45);
+//             const tilt = 0.1 * Math.sin(t * 1.3 + alpha * 5.0);
+
+//             ctx.save();
+//             ctx.globalAlpha = 0.4;
+//             ctx.strokeStyle = COLORS[i % COLORS.length];
+//             drawRect(cx, cy, size, size, tilt);
+//             ctx.restore();
+//         }
+
+//         // Top stack of small rectangles
+//         const topCount = 8;
+//         const headBaseX = apexX;
+//         const headBaseY = apexY - height * 0.24;
+//         for (let i = 0; i < topCount; i++) {
+//             const alpha = i / (topCount - 1);
+//             const cx = headBaseX + Math.sin(t * 0.7 + alpha * 2.4) * 12;
+//             const cy = headBaseY - alpha * 40;
+
+//             const size = 30 + alpha * 40;
+//             const tilt = 0.25 * Math.sin(t * 1.1 + alpha * 3.0);
+
+//             ctx.save();
+//             ctx.globalAlpha = 0.5;
+//             ctx.strokeStyle = COLORS[i % COLORS.length];
+//             drawRect(cx, cy, size * 1.6, size, tilt);
+//             ctx.restore();
+//         }
+
+//         requestAnimationFrame(draw);
+//     }
+
+//     window.addEventListener("resize", resizeCanvas);
+
+//     // Initial setup
+//     resizeCanvas();
+//     requestAnimationFrame(draw);
+
+/**
+ * Load download previews and wire up download buttons
+ * @param {string} auditId - UUID of the audit
+ */
+async function loadDownloadPreviews(auditId) {
+    try {
+        // Fetch Minute Book preview
+        const minuteBookRes = await fetch(`/api/audits/${auditId}/preview/minute-book`);
+        const minuteBookData = await minuteBookRes.json();
+        const minuteBookPreview = document.getElementById('minute-book-preview');
+        if (minuteBookPreview) {
+            minuteBookPreview.textContent = minuteBookData.preview || 'Preview unavailable';
         }
 
-        // Mid-chain of medium rectangles
-        const midCount = 22;
-        for (let i = 0; i < midCount; i++) {
-            const alpha = i / (midCount - 1);
-            const cx = apexX + Math.sin(alpha * 3.0 + t * 0.7) * 10;
-            const cy = apexY - alpha * height * 0.22;
-
-            const size = 60 * (1 - alpha * 0.45);
-            const tilt = 0.1 * Math.sin(t * 1.3 + alpha * 5.0);
-
-            ctx.save();
-            ctx.globalAlpha = 0.4;
-            ctx.strokeStyle = COLORS[i % COLORS.length];
-            drawRect(cx, cy, size, size, tilt);
-            ctx.restore();
+        // Fetch Issues preview
+        const issuesRes = await fetch(`/api/audits/${auditId}/preview/issues`);
+        const issuesData = await issuesRes.json();
+        const issuesPreview = document.getElementById('issues-preview');
+        if (issuesPreview) {
+            issuesPreview.textContent = issuesData.preview || 'Preview unavailable';
         }
 
-        // Top stack of small rectangles
-        const topCount = 8;
-        const headBaseX = apexX;
-        const headBaseY = apexY - height * 0.24;
-        for (let i = 0; i < topCount; i++) {
-            const alpha = i / (topCount - 1);
-            const cx = headBaseX + Math.sin(t * 0.7 + alpha * 2.4) * 12;
-            const cy = headBaseY - alpha * 40;
-
-            const size = 30 + alpha * 40;
-            const tilt = 0.25 * Math.sin(t * 1.1 + alpha * 3.0);
-
-            ctx.save();
-            ctx.globalAlpha = 0.5;
-            ctx.strokeStyle = COLORS[i % COLORS.length];
-            drawRect(cx, cy, size * 1.6, size, tilt);
-            ctx.restore();
+        // Attach download handlers
+        const downloadMinuteBookBtn = document.getElementById('download-minute-book');
+        if (downloadMinuteBookBtn) {
+            downloadMinuteBookBtn.onclick = () => {
+                window.location.href = `/api/audits/${auditId}/download/minute-book`;
+            };
         }
 
-        requestAnimationFrame(draw);
+        const downloadIssuesBtn = document.getElementById('download-issues');
+        if (downloadIssuesBtn) {
+            downloadIssuesBtn.onclick = () => {
+                window.location.href = `/api/audits/${auditId}/download/issues`;
+            };
+        }
+
+    } catch (error) {
+        console.error('Failed to load download previews:', error);
+        const minuteBookPreview = document.getElementById('minute-book-preview');
+        const issuesPreview = document.getElementById('issues-preview');
+        if (minuteBookPreview) minuteBookPreview.textContent = 'Preview unavailable';
+        if (issuesPreview) issuesPreview.textContent = 'Preview unavailable';
     }
-
-    window.addEventListener("resize", resizeCanvas);
-
-    // Initial setup
-    resizeCanvas();
-    requestAnimationFrame(draw);
 }
+
+// ============================================================================
+// SCROLL REVEAL ANIMATIONS
+// ============================================================================
+
+/**
+ * Initialize scroll reveal animations using IntersectionObserver
+ */
+function initScrollReveal() {
+    const revealObserver = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.scroll-reveal').forEach(el => {
+        revealObserver.observe(el);
+    });
+}
+
+// Initialize scroll reveal on page load
+document.addEventListener('DOMContentLoaded', initScrollReveal);
+
+// ============================================================================
+// HERO IMAGE SCROLL MOTION
+// ============================================================================
+
+let heroMotionUpdate = null;
+let heroMotionHandler = null;
+let heroMotionRaf = null;
+let heroMotionTarget = 0;
+let heroMotionCurrent = 0;
+
+/**
+ * Animate the hero image based on scroll position.
+ */
+function initHeroScrollMotion() {
+    const heroSection = document.querySelector('.hero-section');
+    const heroVisual = document.querySelector('.hero-visual');
+
+    if (!heroSection || !heroVisual) return;
+
+    const clamp = (value, min, max) => Math.min(max, Math.max(min, value));
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+        heroVisual.style.setProperty('--hero-x', '0px');
+        heroVisual.style.setProperty('--hero-y', '0px');
+        heroVisual.style.setProperty('--hero-z', '0px');
+        heroVisual.style.setProperty('--hero-scale', '1');
+        return;
+    }
+
+    const applyHeroMotion = (progress) => {
+        const wave = Math.sin(progress * Math.PI);
+        const scale = 1 + (0.25 * wave);
+        const translateY = 12 * wave;
+        const translateX = -8 * wave;
+        const translateZ = 120 * wave;
+
+        heroVisual.style.setProperty('--hero-x', `${translateX.toFixed(2)}px`);
+        heroVisual.style.setProperty('--hero-y', `${translateY.toFixed(2)}px`);
+        heroVisual.style.setProperty('--hero-z', `${translateZ.toFixed(2)}px`);
+        heroVisual.style.setProperty('--hero-scale', scale.toFixed(3));
+    };
+
+    const tick = () => {
+        heroMotionCurrent += (heroMotionTarget - heroMotionCurrent) * 0.12;
+        applyHeroMotion(heroMotionCurrent);
+
+        if (Math.abs(heroMotionTarget - heroMotionCurrent) > 0.001) {
+            heroMotionRaf = window.requestAnimationFrame(tick);
+        } else {
+            heroMotionCurrent = heroMotionTarget;
+            applyHeroMotion(heroMotionCurrent);
+            heroMotionRaf = null;
+        }
+    };
+
+    heroMotionUpdate = () => {
+        const scrollY = window.scrollY || window.pageYOffset;
+        const heroTop = heroSection.offsetTop;
+        const heroHeight = heroSection.offsetHeight;
+        const range = Math.max(360, Math.min(600, heroHeight));
+
+        heroMotionTarget = clamp((scrollY - heroTop) / range, 0, 1);
+
+        if (!heroMotionRaf) {
+            heroMotionRaf = window.requestAnimationFrame(tick);
+        }
+    };
+
+    if (!heroMotionHandler) {
+        heroMotionHandler = () => {
+            if (heroMotionUpdate) heroMotionUpdate();
+        };
+
+        window.addEventListener('scroll', heroMotionHandler, { passive: true });
+        window.addEventListener('resize', heroMotionHandler);
+    }
+
+    heroMotionHandler();
+}
+
+// Initialize hero motion on page load
+document.addEventListener('DOMContentLoaded', initHeroScrollMotion);

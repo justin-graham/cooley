@@ -215,6 +215,185 @@ def extract_from_image(file_path: str) -> str:
     return metadata
 
 
+def parse_pdf_with_bboxes(filepath: str) -> Dict[str, Any]:
+    """
+    Extract text + bounding boxes for each text span from PDF.
+    Used for generating document preview screenshots with highlights.
+
+    Args:
+        filepath: Path to PDF file
+
+    Returns:
+        Dictionary with keys:
+        - full_text: str (complete document text for AI extraction)
+        - text_spans: List[Dict] (each span has: text, page, bbox, char_offset_start, char_offset_end, font_size)
+
+    Example text_span:
+        {
+            'text': '1,000,000',
+            'page': 1,
+            'bbox': [x0, y0, x1, y1],  # PDF coordinates
+            'char_offset_start': 245,
+            'char_offset_end': 254,
+            'font_size': 12.0
+        }
+    """
+    doc = fitz.open(filepath)
+    text_spans = []
+    full_text = ""
+    char_offset = 0
+
+    for page_num, page in enumerate(doc, start=1):
+        blocks = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)["blocks"]
+
+        for block in blocks:
+            if "lines" in block:
+                for line in block["lines"]:
+                    for span in line["spans"]:
+                        span_text = span['text']
+                        text_spans.append({
+                            'text': span_text,
+                            'page': page_num,
+                            'bbox': span['bbox'],  # [x0, y0, x1, y1]
+                            'char_offset_start': char_offset,
+                            'char_offset_end': char_offset + len(span_text),
+                            'font_size': span.get('size', 12.0)
+                        })
+                        full_text += span_text
+                        char_offset += len(span_text)
+
+    doc.close()
+
+    return {
+        'full_text': full_text,
+        'text_spans': text_spans
+    }
+
+
+def convert_to_pdf(filepath: str, output_dir: str) -> str:
+    """
+    Convert DOCX/XLSX/PPTX to PDF using LibreOffice headless.
+    Required for generating document previews from non-PDF files.
+
+    Args:
+        filepath: Path to DOCX/XLSX/PPTX file
+        output_dir: Directory for output PDF
+
+    Returns:
+        Path to generated PDF file
+
+    Raises:
+        RuntimeError: If LibreOffice is not installed
+        subprocess.CalledProcessError: If conversion fails
+    """
+    import subprocess
+
+    # Check if libreoffice is available
+    try:
+        subprocess.run(
+            ['libreoffice', '--version'],
+            capture_output=True,
+            check=True,
+            timeout=5
+        )
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        raise RuntimeError(
+            "LibreOffice not installed. Required for DOCX/XLSX/PPTX preview generation. "
+            "Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)"
+        )
+
+    # Convert to PDF
+    logger.info(f"Converting {os.path.basename(filepath)} to PDF for preview generation")
+    subprocess.run([
+        'libreoffice', '--headless', '--convert-to', 'pdf',
+        '--outdir', output_dir,
+        filepath
+    ], check=True, timeout=30)
+
+    # Return path to generated PDF
+    base_name = os.path.splitext(os.path.basename(filepath))[0]
+    output_pdf = os.path.join(output_dir, f"{base_name}.pdf")
+
+    if not os.path.exists(output_pdf):
+        raise RuntimeError(f"PDF conversion failed - output file not created: {output_pdf}")
+
+    return output_pdf
+
+
+def parse_document_with_paragraphs(file_path: str) -> Dict[str, Any]:
+    """
+    Parse a document file and extract text with paragraph numbering.
+    Each substantive paragraph gets a sequential number for citation purposes.
+
+    Args:
+        file_path: Path to document file
+
+    Returns:
+        Dictionary with keys:
+        - filename: str
+        - type: str (pdf, docx, xlsx, pptx, or unknown)
+        - full_text: str (complete extracted text)
+        - paragraphs: List[Dict] with {number: int, text: str}
+        - error: str (error message if parsing failed, otherwise absent)
+    """
+    # First get the basic parsed result
+    basic_result = parse_document(file_path)
+
+    result = {
+        'filename': basic_result['filename'],
+        'type': basic_result['type'],
+        'full_text': basic_result.get('text', ''),
+        'paragraphs': []
+    }
+
+    # If there was an error in basic parsing, return it
+    if 'error' in basic_result:
+        result['error'] = basic_result['error']
+        return result
+
+    # Split text into paragraphs and number them
+    full_text = basic_result.get('text', '')
+    if not full_text:
+        return result
+
+    # Split on double newlines (paragraph breaks) or single newlines for tighter docs
+    raw_paragraphs = full_text.split('\n')
+
+    paragraph_number = 1
+    current_paragraph = []
+
+    for line in raw_paragraphs:
+        stripped_line = line.strip()
+
+        # Skip truly empty lines
+        if not stripped_line:
+            # If we have accumulated text, save it as a paragraph
+            if current_paragraph:
+                para_text = ' '.join(current_paragraph)
+                if len(para_text) > 20:  # Minimum 20 chars to be substantive
+                    result['paragraphs'].append({
+                        'number': paragraph_number,
+                        'text': para_text
+                    })
+                    paragraph_number += 1
+                current_paragraph = []
+            continue
+
+        # Accumulate non-empty lines
+        current_paragraph.append(stripped_line)
+
+    # Don't forget the last paragraph
+    if current_paragraph:
+        para_text = ' '.join(current_paragraph)
+        if len(para_text) > 20:
+            result['paragraphs'].append({
+                'number': paragraph_number,
+                'text': para_text
+            })
+
+    return result
+
+
 def parse_document(file_path: str) -> Dict[str, Any]:
     """
     Parse a document file and extract text content.

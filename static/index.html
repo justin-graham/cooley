@@ -8,6 +8,8 @@
     <link rel="stylesheet" href="/static/style.css">
 </head>
 <body>
+    <!-- Skip to main content link for accessibility -->
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <!-- STICKY NAVIGATION BAR -->
     <nav class="sticky-nav">
         <div class="nav-container">
@@ -30,6 +32,7 @@
     </header>
 
     <!-- UPLOAD SECTION -->
+    <main id="main-content">
     <section id="upload-section">
         <div id="upload-zone">
             <img src="/static/stripe.png" class="upload-icon" alt="">
@@ -55,14 +58,14 @@
     </section>
 
     <!-- PROGRESS SECTION -->
-    <section id="progress" class="section" style="display: none;">
-        <div class="loader-row">
+    <section id="progress" class="section" style="display: none;" aria-live="polite" aria-busy="true">
+        <div class="loader-row" aria-hidden="true">
             <div class="loader"></div>
             <div class="loader"></div>
             <div class="loader"></div>
         </div>
         <div id="progress-wrapper">
-            <span id="progress-step">Processing</span>
+            <span id="progress-step" role="status">Processing</span>
             <span id="progress-text">Processing documents...</span>
         </div>
     </section>
@@ -77,28 +80,8 @@
             </div>
             <div class="hero-right martian-column-right">
                 <!-- Animation visual -->
-                <div class="hero-visual">
-                    <div class="fig-window">
-                        <div class="fig-header">
-                            <div class="fig-header-left">
-                                <span>&gt;_</span>
-                            </div>
-                            <div class="fig-header-center">[ Tieout ]</div>
-                            <div class="fig-header-right">
-                                <svg viewBox="0 0 24 24" fill="none">
-                                    <line x1="4" y1="7" x2="20" y2="7" stroke-width="1.4" />
-                                    <circle cx="10" cy="7" r="1.8" stroke-width="1.2" fill="none" />
-                                    <line x1="4" y1="17" x2="20" y2="17" stroke-width="1.4" />
-                                    <circle cx="14" cy="17" r="1.8" stroke-width="1.2" fill="none" />
-                                </svg>
-                            </div>
-                        </div>
-                        <div class="fig-inner">
-                            <div class="fig-canvas-wrap" id="hero-canvas-wrap">
-                                <canvas id="hero-canvas"></canvas>
-                            </div>
-                        </div>
-                    </div>
+                <div class="hero-visual scroll-reveal" data-delay="2">
+                    <img src="/static/Tieout-4.png" alt="Tieout analysis" class="hero-image" />
                 </div>
             </div>
         </section>
@@ -120,7 +103,25 @@
             <div class="explainer-left martian-column-left">
                 <div class="explainer-sticky">
                     <p class="section-label">CAP TABLE</p>
+
+                    <!-- Tab Controls -->
+                    <div class="cap-table-tabs">
+                        <button class="cap-table-tab active" data-view="issued">
+                            Issued & Outstanding
+                        </button>
+                        <button class="cap-table-tab" data-view="fully-diluted">
+                            Fully Diluted
+                        </button>
+                        <button class="cap-table-tab" data-view="options">
+                            Option Pool
+                        </button>
+                    </div>
+
                     <p class="date-display" id="cap-table-date">As of: <span></span></p>
+
+                    <!-- View-specific notes -->
+                    <p class="cap-table-note" id="cap-table-note" style="font-size: 0.75rem; color: var(--text-secondary); margin: 0.5rem 0;"></p>
+
                     <div id="cap-table-container"></div>
                 </div>
             </div>
@@ -145,24 +146,24 @@
                 </p>
             </div>
             <div class="features-right martian-column-right">
-                <div id="document-accordion" class="document-accordion">
+                <div id="document-accordion" class="document-accordion" role="tablist" aria-label="Document analysis sections">
                     <div class="accordion-item">
-                        <div class="accordion-header">
+                        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" aria-controls="compliance-content">
                             <h3 class="accordion-title">Compliance Issues</h3>
-                            <span class="accordion-toggle">+</span>
+                            <span class="accordion-toggle" aria-hidden="true">+</span>
                         </div>
-                        <div class="accordion-content">
+                        <div class="accordion-content" id="compliance-content" role="region" aria-hidden="true">
                             <div class="accordion-body">
                                 Compliance issues will appear here.
                             </div>
                         </div>
                     </div>
                     <div class="accordion-item">
-                        <div class="accordion-header">
+                        <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" aria-controls="failed-content">
                             <h3 class="accordion-title">Failed Documents</h3>
-                            <span class="accordion-toggle">+</span>
+                            <span class="accordion-toggle" aria-hidden="true">+</span>
                         </div>
-                        <div class="accordion-content">
+                        <div class="accordion-content" id="failed-content" role="region" aria-hidden="true">
                             <div class="accordion-body">
                                 Failed documents will appear here.
                             </div>
@@ -173,40 +174,62 @@
             </div>
         </section>
 
-        <!-- CTA Section (Martian Grid) -->
-        <section class="cta-section martian-section">
-            <div class="cta-container">
-                <h2 class="cta-heading">Download <span id="cta-company-name">[Company Name]</span> Corporate Governance Tieout</h2>
-                <button class="cta-button" onclick="window.location.href='/'">
-                    DOWNLOAD
-                </button>
+        <!-- Downloads Section (Martian Grid) -->
+        <section class="downloads-section martian-grid">
+            <!-- Left Column: Minute Book -->
+            <div class="download-left martian-column-left">
+                <div class="download-preview-card">
+                    <p class="download-label">MINUTE BOOK INDEX</p>
+                    <div class="download-preview-content" id="minute-book-preview">
+                        Loading preview...
+                    </div>
+                    <button class="download-button" id="download-minute-book">
+                        DOWNLOAD MINUTE BOOK
+                    </button>
+                </div>
+            </div>
+
+            <!-- Right Column: Critical Issues -->
+            <div class="download-right martian-column-right">
+                <div class="download-preview-card">
+                    <p class="download-label">CRITICAL ISSUES REPORT</p>
+                    <div class="download-preview-content" id="issues-preview">
+                        Loading preview...
+                    </div>
+                    <button class="download-button" id="download-issues">
+                        DOWNLOAD CRITICAL ISSUES
+                    </button>
+                </div>
             </div>
         </section>
 
     </section>
+    </main>
 
-    <!-- Footer (Martian Grid) -->
-    <footer class="martian-footer martian-grid">
-        <div class="footer-left martian-column-left">
-                <img src="/static/tieout-logo.png" alt="Tieout" class="footer-logo footer-logo-fill">
-        </div>
-        <div class="footer-right martian-column-right">
-            <ul class="footer-links">
-                <li><a href="/">SECURITY</a></li>
-                <li><a href="/contact">CONTACT</a></li>
-                <li><a href="/privacy">PRIVACY POLICY</a></li>
-            </ul>
-            <p class="footer-copyright">Tieout v1.0 | Justin Graham</p>
+    <!-- Footer -->
+    <footer class="site-footer">
+        <div class="footer-container">
+            <div class="footer-brand">
+                <img src="/static/tieout-logo.png" alt="Tieout" class="footer-logo">
+            </div>
+            <div class="footer-links">
+                <a href="/">Security</a>
+                <a href="/contact">Contact</a>
+                <a href="/privacy">Privacy</a>
+            </div>
+            <div class="footer-copyright">
+                Tieout v1.0 | Justin Graham
+            </div>
         </div>
     </footer>
 
     <!-- Document Viewer Modal -->
-    <div id="document-modal" class="modal" style="display: none;">
-        <div class="modal-backdrop"></div>
+    <div id="document-modal" class="modal" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="modal-filename">
+        <div class="modal-backdrop" aria-hidden="true"></div>
         <div class="modal-card">
             <div class="modal-header">
                 <h3 id="modal-filename" class="modal-title"></h3>
-                <button class="modal-close" aria-label="Close modal">&times;</button>
+                <button class="modal-close" aria-label="Close document viewer" type="button">&times;</button>
             </div>
             <div class="modal-body">
                 <div id="modal-classification" class="modal-classification"></div>

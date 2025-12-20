@@ -1,6 +1,10 @@
 """
 Claude prompt templates for document analysis.
 All prompts are designed to return valid JSON for easy parsing.
+
+NOTE: For extraction prompts, document text will be formatted with paragraph markers
+like [¶1], [¶2], etc. to enable precise citation references. Prompts should request
+that Claude return the paragraph number where each extracted value was found.
 """
 
 # Document type categories for classification
@@ -98,7 +102,7 @@ Respond ONLY with valid JSON matching this schema."""
 
 STOCK_EXTRACTION_PROMPT = """You are analyzing a Stock Purchase Agreement or stock issuance document.
 
-DOCUMENT TEXT:
+DOCUMENT TEXT (with paragraph markers [¶N]):
 ---
 {text}
 ---
@@ -109,13 +113,14 @@ Extract ALL equity issuances mentioned in this document. For each issuance:
 - share_class: Type of stock (e.g., "Common Stock", "Series A Preferred")
 - price_per_share: Price per share (float, or null if not mentioned)
 - date: Effective date of issuance (YYYY-MM-DD format)
-- source_quote: Exact text from document showing this issuance (for verification)
+- source_quote: Exact verbatim text from document showing this issuance (for verification)
+- paragraph_number: The paragraph number [¶N] where this issuance is mentioned (integer)
 
 EXAMPLE INPUT:
-"STOCK PURCHASE AGREEMENT dated March 1, 2021 between Acme, Inc. and John Smith. Purchaser agrees to purchase 1,000,000 shares of Common Stock at $0.001 per share."
+"[¶1] STOCK PURCHASE AGREEMENT dated March 1, 2021 between Acme, Inc. and John Smith. [¶2] Purchaser agrees to purchase 1,000,000 shares of Common Stock at $0.001 per share."
 
 EXAMPLE OUTPUT:
-[{{"shareholder": "John Smith", "shares": 1000000, "share_class": "Common Stock", "price_per_share": 0.001, "date": "2021-03-01", "source_quote": "Purchaser agrees to purchase 1,000,000 shares of Common Stock at $0.001 per share."}}]
+[{{"shareholder": "John Smith", "shares": 1000000, "share_class": "Common Stock", "price_per_share": 0.001, "date": "2021-03-01", "source_quote": "Purchaser agrees to purchase 1,000,000 shares of Common Stock at $0.001 per share.", "paragraph_number": 2}}]
 
 RESPONSE FORMAT (JSON Schema):
 [
@@ -125,7 +130,8 @@ RESPONSE FORMAT (JSON Schema):
     "share_class": string,
     "price_per_share": float or null,
     "date": string (YYYY-MM-DD),
-    "source_quote": string
+    "source_quote": string,
+    "paragraph_number": integer
   }}
 ]
 
@@ -136,7 +142,7 @@ Respond ONLY with valid JSON array matching this schema:"""
 
 SAFE_EXTRACTION_PROMPT = """You are analyzing a SAFE (Simple Agreement for Future Equity) document.
 
-DOCUMENT TEXT:
+DOCUMENT TEXT (with paragraph markers [¶N]):
 ---
 {text}
 ---
@@ -147,13 +153,14 @@ Extract the following:
 - valuation_cap: Valuation cap in dollars (integer, or null)
 - discount_rate: Discount rate as a percentage (float, or null)
 - date: Effective date of the SAFE (YYYY-MM-DD format)
-- source_quote: Exact text from document showing the investment amount and terms (for verification)
+- source_quote: Exact verbatim text from document showing the investment amount and terms (for verification)
+- paragraph_number: The paragraph number [¶N] where the key terms are mentioned (integer)
 
 EXAMPLE INPUT:
-"SAFE dated June 15, 2022 between Acme, Inc. and XYZ Ventures. Investor agrees to invest $500,000 with a valuation cap of $5,000,000 and 20% discount."
+"[¶1] SAFE dated June 15, 2022 between Acme, Inc. and XYZ Ventures. [¶2] Investor agrees to invest $500,000 with a valuation cap of $5,000,000 and 20% discount."
 
 EXAMPLE OUTPUT:
-{{"investor": "XYZ Ventures", "amount": 500000, "valuation_cap": 5000000, "discount_rate": 20.0, "date": "2022-06-15", "source_quote": "Investor agrees to invest $500,000 with a valuation cap of $5,000,000 and 20% discount."}}
+{{"investor": "XYZ Ventures", "amount": 500000, "valuation_cap": 5000000, "discount_rate": 20.0, "date": "2022-06-15", "source_quote": "Investor agrees to invest $500,000 with a valuation cap of $5,000,000 and 20% discount.", "paragraph_number": 2}}
 
 RESPONSE FORMAT (JSON Schema):
 {{
@@ -161,6 +168,45 @@ RESPONSE FORMAT (JSON Schema):
   "amount": integer,
   "valuation_cap": integer or null,
   "discount_rate": float or null,
+  "date": string (YYYY-MM-DD),
+  "source_quote": string,
+  "paragraph_number": integer
+}}
+
+Respond ONLY with valid JSON matching this schema:"""
+
+
+CONVERTIBLE_NOTE_EXTRACTION_PROMPT = """You are analyzing a Convertible Note or Convertible Promissory Note document.
+
+DOCUMENT TEXT:
+---
+{text}
+---
+
+Extract the following:
+- investor: Name of the note holder/investor
+- principal: Principal amount of the note in dollars (integer)
+- interest_rate: Annual interest rate as a percentage (float, e.g., 5.0 for 5%)
+- maturity_date: Date when the note matures (YYYY-MM-DD format)
+- discount_rate: Conversion discount rate as a percentage (float, or null if not mentioned)
+- valuation_cap: Valuation cap for conversion in dollars (integer, or null if not mentioned)
+- date: Effective date of the note issuance (YYYY-MM-DD format)
+- source_quote: Exact text from document showing the principal amount, interest rate, and conversion terms (for verification)
+
+EXAMPLE INPUT:
+"CONVERTIBLE PROMISSORY NOTE dated April 10, 2023 between Acme, Inc. and Tech Ventures LLC. Principal: $250,000. Interest Rate: 6% per annum. Maturity Date: April 10, 2025. The note will convert at a 20% discount to the next qualified financing, subject to a valuation cap of $8,000,000."
+
+EXAMPLE OUTPUT:
+{{"investor": "Tech Ventures LLC", "principal": 250000, "interest_rate": 6.0, "maturity_date": "2025-04-10", "discount_rate": 20.0, "valuation_cap": 8000000, "date": "2023-04-10", "source_quote": "Principal: $250,000. Interest Rate: 6% per annum. Maturity Date: April 10, 2025. The note will convert at a 20% discount to the next qualified financing, subject to a valuation cap of $8,000,000."}}
+
+RESPONSE FORMAT (JSON Schema):
+{{
+  "investor": string,
+  "principal": integer,
+  "interest_rate": float or null,
+  "maturity_date": string (YYYY-MM-DD) or null,
+  "discount_rate": float or null,
+  "valuation_cap": integer or null,
   "date": string (YYYY-MM-DD),
   "source_quote": string
 }}
@@ -186,7 +232,7 @@ Respond ONLY with valid JSON:
 
 OPTION_GRANT_EXTRACTION_PROMPT = """You are analyzing an Option Grant Agreement or RSU Agreement.
 
-DOCUMENT TEXT:
+DOCUMENT TEXT (with paragraph markers [¶N]):
 ---
 {text}
 ---
@@ -197,15 +243,16 @@ Extract:
 - strike_price: Exercise/strike price per share (float, or null for RSUs)
 - vesting_schedule: Brief description of vesting (e.g., "4 years, 1 year cliff")
 - grant_date: Date of the grant (YYYY-MM-DD format)
-- source_quote: Exact text from document showing the grant details (for verification)
+- source_quote: Exact verbatim text from document showing the grant details (for verification)
+- paragraph_number: The paragraph number [¶N] where the grant is mentioned (integer)
 
 Respond ONLY with valid JSON:
-{{"recipient": "...", "shares": 0, "strike_price": null, "vesting_schedule": "...", "grant_date": "...", "source_quote": "..."}}"""
+{{"recipient": "...", "shares": 0, "strike_price": null, "vesting_schedule": "...", "grant_date": "...", "source_quote": "...", "paragraph_number": 0}}"""
 
 
 SHARE_REPURCHASE_EXTRACTION_PROMPT = """You are analyzing a Share Repurchase Agreement or repurchase documentation.
 
-DOCUMENT TEXT:
+DOCUMENT TEXT (with paragraph markers [¶N]):
 ---
 {text}
 ---
@@ -216,13 +263,14 @@ Extract:
 - share_class: Type of stock repurchased (e.g., "Common Stock")
 - price_per_share: Price per share paid (float, or null if not mentioned)
 - date: Date of repurchase transaction (YYYY-MM-DD format)
-- source_quote: Exact text from document showing the repurchase details (for verification)
+- source_quote: Exact verbatim text from document showing the repurchase details (for verification)
+- paragraph_number: The paragraph number [¶N] where the repurchase is mentioned (integer)
 
 EXAMPLE INPUT:
-"STOCK REPURCHASE AGREEMENT dated September 10, 2023. Acme, Inc. agrees to repurchase 500,000 shares of Common Stock from Jane Doe at $1.50 per share."
+"[¶1] STOCK REPURCHASE AGREEMENT dated September 10, 2023. [¶2] Acme, Inc. agrees to repurchase 500,000 shares of Common Stock from Jane Doe at $1.50 per share."
 
 EXAMPLE OUTPUT:
-{{"shareholder": "Jane Doe", "shares": 500000, "share_class": "Common Stock", "price_per_share": 1.50, "date": "2023-09-10", "source_quote": "Acme, Inc. agrees to repurchase 500,000 shares of Common Stock from Jane Doe at $1.50 per share."}}
+{{"shareholder": "Jane Doe", "shares": 500000, "share_class": "Common Stock", "price_per_share": 1.50, "date": "2023-09-10", "source_quote": "Acme, Inc. agrees to repurchase 500,000 shares of Common Stock from Jane Doe at $1.50 per share.", "paragraph_number": 2}}
 
 RESPONSE FORMAT (JSON Schema):
 {{
@@ -231,7 +279,8 @@ RESPONSE FORMAT (JSON Schema):
   "share_class": string,
   "price_per_share": float or null,
   "date": string (YYYY-MM-DD),
-  "source_quote": string
+  "source_quote": string,
+  "paragraph_number": integer
 }}
 
 Respond ONLY with valid JSON matching this schema:"""

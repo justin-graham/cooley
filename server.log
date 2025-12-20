@@ -1,0 +1,751 @@
+INFO:     Will watch for changes in these directories: ['/Users/justin/corporate-audit-mvp']
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [10423] using WatchFiles
+INFO:     Started server process [10441]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+🚀 Corporate Governance Audit Platform API started
+📊 Database: postgresql://jg:a4HZ0Be162M3t4GI6Pktqsd6luuhb4FN@d...
+🤖 Claude API: Configured
+INFO:     127.0.0.1:51612 - "GET /app HTTP/1.1" 401 Unauthorized
+INFO:     127.0.0.1:51614 - "GET / HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51614 - "GET /static/style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51614 - "GET /static/tieout-logo.png HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51615 - "GET /static/landing.css HTTP/1.1" 304 Not Modified
+INFO:     127.0.0.1:51616 - "GET /static/landing.js HTTP/1.1" 304 Not Modified
+2025-12-08 18:37:33,309 - passlib.handlers.bcrypt - WARNING - (trapped) error reading bcrypt version
+Traceback (most recent call last):
+  File "/Library/Frameworks/Python.framework/Versions/3.12/lib/python3.12/site-packages/passlib/handlers/bcrypt.py", line 620, in _load_backend_mixin
+    version = _bcrypt.__about__.__version__
+              ^^^^^^^^^^^^^^^^^
+AttributeError: module 'bcrypt' has no attribute '__about__'
+INFO:     127.0.0.1:51614 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51614 - "GET /app HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51614 - "GET /static/stripe.png HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51618 - "GET /static/script.js HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51621 - "POST /upload HTTP/1.1" 200 OK
+2025-12-08 18:37:44,255 - app.main - INFO - Starting processing for audit 99292d1d-f9b9-4274-bc33-b01c9dcf278e
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:37:45,428 - app.main - INFO - Extracted 34 files for audit 99292d1d-f9b9-4274-bc33-b01c9dcf278e
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:37:47,507 - app.main - INFO - Parsing document 1/34: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX
+2025-12-08 18:37:47,507 - app.main - INFO - Converting Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX to PDF for preview generation
+2025-12-08 18:37:47,517 - app.main - WARNING - Failed to convert/extract bbox for Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX: LibreOffice not installed. Required for DOCX/XLSX/PPTX preview generation. Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)
+2025-12-08 18:37:47,767 - app.main - INFO - Successfully parsed: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX
+2025-12-08 18:37:47,837 - app.main - INFO - Parsing document 2/34: 8a. Rehydrate Cap Table.xlsx
+2025-12-08 18:37:47,837 - app.main - INFO - Converting 8a. Rehydrate Cap Table.xlsx to PDF for preview generation
+2025-12-08 18:37:47,847 - app.main - WARNING - Failed to convert/extract bbox for 8a. Rehydrate Cap Table.xlsx: LibreOffice not installed. Required for DOCX/XLSX/PPTX preview generation. Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)
+2025-12-08 18:37:47,867 - app.main - INFO - Successfully parsed: 8a. Rehydrate Cap Table.xlsx
+2025-12-08 18:37:47,937 - app.main - INFO - Parsing document 3/34: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:37:47,937 - app.main - INFO - Extracting bbox data from 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:37:48,002 - app.main - INFO - Extracted 70 text spans from 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:37:48,365 - app.main - INFO - Successfully parsed: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:37:48,421 - app.main - INFO - Parsing document 4/34: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx
+2025-12-08 18:37:48,421 - app.main - INFO - Converting Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx to PDF for preview generation
+2025-12-08 18:37:48,431 - app.main - WARNING - Failed to convert/extract bbox for Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx: LibreOffice not installed. Required for DOCX/XLSX/PPTX preview generation. Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)
+2025-12-08 18:37:48,444 - app.main - INFO - Successfully parsed: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx
+2025-12-08 18:37:48,512 - app.main - INFO - Parsing document 5/34: 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+2025-12-08 18:37:48,512 - app.main - INFO - Extracting bbox data from 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+Consider using the pymupdf_layout package for a greatly improved page layout analysis.
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:37:49,274 - app.main - INFO - Extracted 0 text spans from 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51621 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:38:09,284 - app.main - ERROR - Timeout parsing 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf after 20 seconds
+2025-12-08 18:38:09,290 - app.main - INFO - Attempting fallback extraction for 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+2025-12-08 18:38:10,058 - app.main - INFO - Fallback extraction succeeded for 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+2025-12-08 18:38:11,490 - app.main - INFO - Parsing document 6/34: 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:38:11,496 - app.main - INFO - Extracting bbox data from 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:38:11,590 - app.main - INFO - Extracted 335 text spans from 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+INFO:     127.0.0.1:51637 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+find_tables: exception occurred: not a textpage of this page
+2025-12-08 18:38:14,741 - app.main - INFO - Successfully parsed: 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:38:14,817 - app.main - INFO - Parsing document 7/34: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:38:14,823 - app.main - INFO - Extracting bbox data from 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:38:14,896 - app.main - INFO - Extracted 341 text spans from 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+INFO:     127.0.0.1:51637 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+find_tables: exception occurred: not a textpage of this page
+2025-12-08 18:38:24,074 - app.main - INFO - Successfully parsed: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:38:24,133 - app.main - INFO - Parsing document 8/34: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:38:24,134 - app.main - INFO - Extracting bbox data from 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:38:24,163 - app.main - INFO - Extracted 68 text spans from 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:38:24,389 - app.main - INFO - Successfully parsed: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:38:24,442 - app.main - INFO - Parsing document 9/34: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:38:24,442 - app.main - INFO - Extracting bbox data from 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:38:24,566 - app.main - INFO - Extracted 222 text spans from 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:38:25,393 - app.main - INFO - Successfully parsed: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:38:25,448 - app.main - INFO - Parsing document 10/34: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:38:25,448 - app.main - INFO - Extracting bbox data from 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:38:25,498 - app.main - INFO - Extracted 92 text spans from 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:38:25,880 - app.main - INFO - Successfully parsed: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:38:27,055 - app.main - INFO - Parsing document 11/34: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:38:27,055 - app.main - INFO - Extracting bbox data from 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:38:27,188 - app.main - INFO - Extracted 253 text spans from 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:38:28,108 - app.main - INFO - Successfully parsed: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:38:28,169 - app.main - INFO - Parsing document 12/34: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:38:28,170 - app.main - INFO - Extracting bbox data from 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:38:28,679 - app.main - INFO - Extracted 796 text spans from 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+INFO:     127.0.0.1:51642 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:38:32,586 - app.main - INFO - Successfully parsed: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:38:32,665 - app.main - INFO - Parsing document 13/34: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:38:32,665 - app.main - INFO - Extracting bbox data from 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:38:32,696 - app.main - INFO - Extracted 68 text spans from 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:38:32,965 - app.main - INFO - Successfully parsed: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:38:33,018 - app.main - INFO - Parsing document 14/34: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:38:33,018 - app.main - INFO - Extracting bbox data from 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:38:33,059 - app.main - INFO - Extracted 111 text spans from 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:38:33,301 - app.main - INFO - Successfully parsed: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:38:33,368 - app.main - INFO - Parsing document 15/34: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:38:33,368 - app.main - INFO - Extracting bbox data from 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:38:33,385 - app.main - INFO - Extracted 27 text spans from 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:38:33,510 - app.main - INFO - Successfully parsed: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+INFO:     127.0.0.1:51642 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:38:34,563 - app.main - INFO - Parsing document 16/34: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:38:34,563 - app.main - INFO - Extracting bbox data from 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:38:34,618 - app.main - INFO - Extracted 338 text spans from 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:38:43,012 - app.main - INFO - Successfully parsed: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:38:43,068 - app.main - INFO - Parsing document 17/34: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:38:43,068 - app.main - INFO - Extracting bbox data from 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:38:43,121 - app.main - INFO - Extracted 56 text spans from 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:38:43,450 - app.main - INFO - Successfully parsed: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:38:43,503 - app.main - INFO - Parsing document 18/34: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:38:43,503 - app.main - INFO - Extracting bbox data from 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:38:43,529 - app.main - INFO - Extracted 31 text spans from 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:38:43,684 - app.main - INFO - Successfully parsed: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:38:43,745 - app.main - INFO - Parsing document 19/34: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:38:43,745 - app.main - INFO - Extracting bbox data from 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:38:44,244 - app.main - INFO - Extracted 795 text spans from 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:38:47,900 - app.main - INFO - Successfully parsed: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:38:47,955 - app.main - INFO - Parsing document 20/34: 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:38:47,955 - app.main - INFO - Extracting bbox data from 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:38:48,795 - app.main - INFO - Extracted 0 text spans from 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+INFO:     127.0.0.1:51648 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:39:08,810 - app.main - ERROR - Timeout parsing 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf after 20 seconds
+2025-12-08 18:39:08,815 - app.main - INFO - Attempting fallback extraction for 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:39:09,654 - app.main - INFO - Fallback extraction succeeded for 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:39:11,030 - app.main - INFO - Parsing document 21/34: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:39:11,036 - app.main - INFO - Extracting bbox data from 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:39:11,242 - app.main - INFO - Extracted 259 text spans from 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+find_tables: exception occurred: not a textpage of this page
+2025-12-08 18:39:12,158 - app.main - INFO - Successfully parsed: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:39:12,208 - app.main - INFO - Parsing document 22/34: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:39:12,209 - app.main - INFO - Extracting bbox data from 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:39:12,696 - app.main - INFO - Extracted 797 text spans from 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:39:16,271 - app.main - INFO - Successfully parsed: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:39:16,326 - app.main - INFO - Parsing document 23/34: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:39:16,326 - app.main - INFO - Extracting bbox data from 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:39:16,377 - app.main - INFO - Extracted 82 text spans from 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:39:16,774 - app.main - INFO - Successfully parsed: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:39:16,828 - app.main - INFO - Parsing document 24/34: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:16,828 - app.main - INFO - Extracting bbox data from 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:17,393 - app.main - INFO - Extracted 700 text spans from 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:23,407 - app.main - INFO - Successfully parsed: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:23,460 - app.main - INFO - Parsing document 25/34: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:39:23,461 - app.main - INFO - Extracting bbox data from 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:39:23,511 - app.main - INFO - Extracted 341 text spans from 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:39:32,114 - app.main - INFO - Successfully parsed: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:39:33,247 - app.main - INFO - Parsing document 26/34: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:39:33,248 - app.main - INFO - Extracting bbox data from 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:39:33,284 - app.main - INFO - Extracted 67 text spans from 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:39:33,478 - app.main - INFO - Successfully parsed: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:39:33,530 - app.main - INFO - Parsing document 27/34: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:33,530 - app.main - INFO - Extracting bbox data from 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:33,650 - app.main - INFO - Extracted 225 text spans from 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:34,372 - app.main - INFO - Successfully parsed: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:39:34,426 - app.main - INFO - Parsing document 28/34: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:39:34,426 - app.main - INFO - Extracting bbox data from 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:39:34,563 - app.main - INFO - Extracted 260 text spans from 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:39:35,389 - app.main - INFO - Successfully parsed: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:39:35,441 - app.main - INFO - Parsing document 29/34: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:39:35,441 - app.main - INFO - Extracting bbox data from 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:39:35,575 - app.main - INFO - Extracted 225 text spans from 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:39:36,313 - app.main - INFO - Successfully parsed: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:39:36,365 - app.main - INFO - Parsing document 30/34: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:39:36,365 - app.main - INFO - Extracting bbox data from 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:39:36,972 - app.main - INFO - Extracted 754 text spans from 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:39:45,377 - app.main - INFO - Successfully parsed: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:39:46,472 - app.main - INFO - Parsing document 31/34: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:39:46,472 - app.main - INFO - Extracting bbox data from 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:39:46,526 - app.main - INFO - Extracted 9 text spans from 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:39:56,595 - app.main - INFO - Successfully parsed: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:39:56,652 - app.main - INFO - Parsing document 32/34: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:39:56,653 - app.main - INFO - Extracting bbox data from 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:39:57,136 - app.main - INFO - Extracted 823 text spans from 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:40:00,340 - app.main - INFO - Successfully parsed: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:40:00,391 - app.main - INFO - Parsing document 33/34: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:40:00,392 - app.main - INFO - Extracting bbox data from 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:40:00,440 - app.main - INFO - Extracted 82 text spans from 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:40:00,768 - app.main - INFO - Successfully parsed: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:40:01,823 - app.main - INFO - Parsing document 34/34: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:40:01,824 - app.main - INFO - Extracting bbox data from 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:40:01,880 - app.main - INFO - Extracted 83 text spans from 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:40:02,062 - app.main - INFO - Successfully parsed: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:40:02,111 - app.main - INFO - Parsed 34 documents for audit 99292d1d-f9b9-4274-bc33-b01c9dcf278e
+2025-12-08 18:40:02,112 - app.processing - INFO - Starting 3-pass processing for 34 documents
+INFO:     127.0.0.1:51703 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:40:04,138 - app.processing - INFO - Classifying document 1/34: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX
+2025-12-08 18:40:04,147 - app.processing - INFO - Keyword match found: 'equity\s+incentive\s+plan|\d+\s+stock\s+plan' -> Equity Incentive Plan
+2025-12-08 18:40:04,148 - app.processing - INFO - Document classified by keywords: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX -> Equity Incentive Plan
+2025-12-08 18:40:05,134 - app.processing - INFO - Classifying document 2/34: 8a. Rehydrate Cap Table.xlsx
+2025-12-08 18:40:05,139 - app.processing - INFO - Keyword match found: 'cap(?:italization)?\s+table|cap\s+table\s+summary|ownership\s+summary' -> Financial Statement
+2025-12-08 18:40:05,139 - app.processing - INFO - Document classified by keywords: 8a. Rehydrate Cap Table.xlsx -> Financial Statement
+2025-12-08 18:40:06,186 - app.processing - INFO - Classifying document 3/34: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:40:06,188 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:40:06,188 - app.processing - INFO - Document classified by keywords: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf -> Charter Document
+2025-12-08 18:40:07,161 - app.processing - INFO - Classifying document 4/34: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx
+2025-12-08 18:40:10,611 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:40:10,618 - app.processing - INFO - Document classified by Claude: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx -> Option Grant Agreement
+2025-12-08 18:40:11,627 - app.processing - INFO - Classifying document 5/34: 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+2025-12-08 18:40:14,295 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:40:14,298 - app.processing - INFO - Document classified by Claude: 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf -> Other
+2025-12-08 18:40:15,406 - app.processing - INFO - Classifying document 6/34: 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:40:16,493 - app.processing - INFO - Classifying document 7/34: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:40:16,495 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:16,495 - app.processing - INFO - Document classified by keywords: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf -> Stock Purchase Agreement
+INFO:     127.0.0.1:51731 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:40:17,746 - app.processing - INFO - Classifying document 8/34: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:40:17,747 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:17,748 - app.processing - INFO - Document classified by keywords: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:19,105 - app.processing - INFO - Classifying document 9/34: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:40:22,105 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:40:22,107 - app.processing - INFO - Document classified by Claude: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf -> Assignment Agreement
+2025-12-08 18:40:23,084 - app.processing - INFO - Classifying document 10/34: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:40:23,085 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:40:23,085 - app.processing - INFO - Document classified by keywords: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf -> Charter Document
+2025-12-08 18:40:24,175 - app.processing - INFO - Classifying document 11/34: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:40:24,175 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:24,176 - app.processing - INFO - Document classified by keywords: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:25,144 - app.processing - INFO - Classifying document 12/34: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:40:25,145 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:25,145 - app.processing - INFO - Document classified by keywords: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:26,454 - app.processing - INFO - Classifying document 13/34: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:40:26,455 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:26,455 - app.processing - INFO - Document classified by keywords: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:27,551 - app.processing - INFO - Classifying document 14/34: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:40:27,553 - app.processing - INFO - Keyword match found: 'consent\s+of\s+(board|directors|stockholders)|written\s+consent' -> Board/Shareholder Minutes
+2025-12-08 18:40:27,553 - app.processing - INFO - Document classified by keywords: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf -> Board/Shareholder Minutes
+2025-12-08 18:40:28,586 - app.processing - INFO - Classifying document 15/34: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:40:31,734 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:40:31,736 - app.processing - INFO - Document classified by Claude: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf -> Share Repurchase Agreement
+2025-12-08 18:40:32,996 - app.processing - INFO - Classifying document 16/34: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:40:32,997 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:32,997 - app.processing - INFO - Document classified by keywords: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:34,711 - app.processing - INFO - Classifying document 17/34: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:40:34,712 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:40:34,713 - app.processing - INFO - Document classified by keywords: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf -> Charter Document
+2025-12-08 18:40:36,008 - app.processing - INFO - Classifying document 18/34: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:40:36,009 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:36,010 - app.processing - INFO - Document classified by keywords: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:37,045 - app.processing - INFO - Classifying document 19/34: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:40:37,046 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:37,046 - app.processing - INFO - Document classified by keywords: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:38,097 - app.processing - INFO - Classifying document 20/34: 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:40:40,746 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:40:40,749 - app.processing - INFO - Document classified by Claude: 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf -> Other
+2025-12-08 18:40:41,756 - app.processing - INFO - Classifying document 21/34: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:40:41,759 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:41,759 - app.processing - INFO - Document classified by keywords: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:42,765 - app.processing - INFO - Classifying document 22/34: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:40:42,767 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:42,768 - app.processing - INFO - Document classified by keywords: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:43,755 - app.processing - INFO - Classifying document 23/34: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:40:43,757 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:40:43,757 - app.processing - INFO - Document classified by keywords: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf -> Charter Document
+2025-12-08 18:40:44,765 - app.processing - INFO - Classifying document 24/34: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:40:47,707 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:40:47,709 - app.processing - INFO - Document classified by Claude: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf -> IP/Proprietary Info Agreement
+2025-12-08 18:40:48,712 - app.processing - INFO - Classifying document 25/34: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:40:48,713 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:48,713 - app.processing - INFO - Document classified by keywords: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:49,777 - app.processing - INFO - Classifying document 26/34: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:40:49,779 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:49,779 - app.processing - INFO - Document classified by keywords: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:50,846 - app.processing - INFO - Classifying document 27/34: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:40:55,797 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:40:55,799 - app.processing - INFO - Document classified by Claude: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf -> Assignment Agreement
+2025-12-08 18:40:56,858 - app.processing - INFO - Classifying document 28/34: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:40:56,860 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:40:56,860 - app.processing - INFO - Document classified by keywords: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf -> Stock Purchase Agreement
+2025-12-08 18:40:57,845 - app.processing - INFO - Classifying document 29/34: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:41:01,225 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:41:01,227 - app.processing - INFO - Document classified by Claude: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf -> Assignment Agreement
+2025-12-08 18:41:02,235 - app.processing - INFO - Classifying document 30/34: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:41:02,236 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:41:02,236 - app.processing - INFO - Document classified by keywords: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf -> Charter Document
+2025-12-08 18:41:03,214 - app.processing - INFO - Classifying document 31/34: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:41:06,273 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:41:06,274 - app.processing - INFO - Document classified by Claude: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf -> Other
+2025-12-08 18:41:07,438 - app.processing - INFO - Classifying document 32/34: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:41:07,439 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:41:07,439 - app.processing - INFO - Document classified by keywords: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf -> Stock Purchase Agreement
+2025-12-08 18:41:08,589 - app.processing - INFO - Classifying document 33/34: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:41:08,590 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:41:08,590 - app.processing - INFO - Document classified by keywords: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf -> Charter Document
+2025-12-08 18:41:09,608 - app.processing - INFO - Classifying document 34/34: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:41:09,609 - app.processing - INFO - Keyword match found: '83\s*\(\s*b\s*\)' -> 83(b) Election
+2025-12-08 18:41:09,610 - app.processing - INFO - Document classified by keywords: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf -> 83(b) Election
+2025-12-08 18:41:09,610 - app.processing - INFO - Pass 1 complete: Classified 34 documents
+2025-12-08 18:41:53,652 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:41:58,707 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:41:58,709 - app.processing - INFO - Generated preview and summary for Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx: None granted 100,000 Common options at N/A strike price on 2023-04-28
+2025-12-08 18:42:05,532 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:05,536 - app.processing - INFO - No numbers to highlight for doc ff17e655-26a3-4d36-aae1-d33fdd4c5b16, skipping preview generation
+2025-12-08 18:42:05,536 - app.processing - INFO - Generated preview and summary for 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf: Justin Kan received N/A Restricted Stock shares at $0.0100 per share on None
+2025-12-08 18:42:12,079 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:17,048 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:22,489 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:28,267 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:28,380 - app.processing - INFO - Generated preview for doc fe895737-bcb1-4a10-b22f-a3d79523cc76: 2 highlights, 216620 bytes
+2025-12-08 18:42:28,380 - app.processing - INFO - Generated preview and summary for 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf: Justin Kan received 100,000 Common Stock shares at $0.0001 per share on 2023-11-08
+INFO:     127.0.0.1:51861 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:42:34,753 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:39,735 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:43,626 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:43,630 - app.processing - INFO - Extracted repurchase from 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf: shareholder='Tyler Saleck', shares=None, class='Stock'
+2025-12-08 18:42:43,630 - app.processing - INFO - No numbers to highlight for doc 65cfa718-647f-4cf9-ad51-04406f0bdc89, skipping preview generation
+2025-12-08 18:42:43,631 - app.processing - INFO - Generated preview and summary for 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf: Company repurchased N/A Stock shares from Tyler Saleck on 2024-02-06
+2025-12-08 18:42:47,866 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:47,868 - app.processing - INFO - No numbers to highlight for doc 10aa526d-1207-40d7-b17a-3bd8d0cbaba2, skipping preview generation
+2025-12-08 18:42:47,868 - app.processing - INFO - Generated preview and summary for 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf: Tyler Saleck received N/A Restricted Stock shares at $0.0100 per share on None
+INFO:     127.0.0.1:51870 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+2025-12-08 18:42:52,101 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:42:57,621 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:03,032 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:03,094 - app.processing - INFO - Generated preview for doc fcc4e124-9eb7-42f6-bf8e-9a303ee1d86c: 2 highlights, 230848 bytes
+2025-12-08 18:43:03,095 - app.processing - INFO - Generated preview and summary for 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf: Tyler Saleck received 100,000 Common Stock shares at $0.0001 per share on 2023-11-09
+2025-12-08 18:43:10,336 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:15,587 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:15,658 - app.processing - INFO - Generated preview for doc 867997d3-73d5-459e-ab0d-62b2f827a9ee: 2 highlights, 229996 bytes
+2025-12-08 18:43:15,659 - app.processing - INFO - Generated preview and summary for 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf: Christopher Ratcliffe received 100,000 Common Stock shares at $0.0001 per share on 2023-11-09
+2025-12-08 18:43:19,467 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:25,145 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:25,147 - app.processing - INFO - No numbers to highlight for doc d9dc580c-85b9-4962-82df-0cd825b4d92e, skipping preview generation
+2025-12-08 18:43:25,147 - app.processing - INFO - Generated preview and summary for 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf: Christopher Ratcliffe received N/A Restricted Stock shares at $0.0100 per share on None
+2025-12-08 18:43:31,002 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:38,004 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:43,430 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:50,088 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:50,177 - app.processing - INFO - Generated preview for doc 9731c6a4-2d70-442e-aae2-04835010133f: 2 highlights, 409700 bytes
+2025-12-08 18:43:50,177 - app.processing - INFO - Generated preview and summary for 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf: Jake Sortor received 9,000,000 Common Stock shares at $0.0001 per share on 2023-01-20
+2025-12-08 18:43:54,045 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:43:55,020 - app.processing - INFO - Pass 2 complete: Extracted data from 34 documents
+2025-12-08 18:43:56,100 - app.processing - INFO - Extracted 4 equity transactions from documents
+2025-12-08 18:43:56,101 - app.processing - INFO - Matching 4 transactions with 7 approval documents via batch Claude call...
+2025-12-08 18:44:06,470 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:44:06,472 - app.processing - INFO - Batch approval matching complete: 4 matches processed
+2025-12-08 18:44:09,016 - app.processing - INFO - Inserted 4 equity events into database
+2025-12-08 18:44:09,979 - app.processing - INFO - Built timeline programmatically: 6 events
+2025-12-08 18:44:09,980 - app.processing - INFO - Using programmatic timeline (6 events)
+2025-12-08 18:44:11,141 - app.processing - INFO - Repurchase shares=None for Tyler Saleck, attempting to infer from issuances...
+2025-12-08 18:44:11,141 - app.processing - WARNING - Could not infer repurchase shares for Tyler Saleck - no matching issuances found
+2025-12-08 18:44:11,141 - app.processing - INFO - Adjusted last cap table entry by -0.01% to ensure 100% total
+2025-12-08 18:44:11,142 - app.processing - INFO - Built cap table programmatically: 4 entries
+2025-12-08 18:44:12,190 - app.processing - INFO - Deterministic checks found 1 issues
+2025-12-08 18:44:38,832 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:44:38,835 - app.processing - INFO - Total issues: 18 (1 deterministic, 17 AI-detected)
+2025-12-08 18:44:39,947 - app.processing - INFO - Pass 3 complete: Generated timeline, cap table, and issues
+2025-12-08 18:44:44,069 - app.processing - INFO - Audit 99292d1d-f9b9-4274-bc33-b01c9dcf278e completed successfully
+2025-12-08 18:44:44,076 - app.main - INFO - Successfully completed audit 99292d1d-f9b9-4274-bc33-b01c9dcf278e
+INFO:     127.0.0.1:51939 - "GET /status/99292d1d-f9b9-4274-bc33-b01c9dcf278e HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51939 - "GET /api/audits/99292d1d-f9b9-4274-bc33-b01c9dcf278e/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51939 - "GET /api/audits/99292d1d-f9b9-4274-bc33-b01c9dcf278e/captable?as_of_date=2023-11-09 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51939 - "GET /api/audits/99292d1d-f9b9-4274-bc33-b01c9dcf278e/options?as_of_date=2023-11-09 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52047 - "GET /static/style.css HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52049 - "POST /api/auth/login HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52049 - "GET /app HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "POST /upload HTTP/1.1" 200 OK
+2025-12-08 18:50:37,350 - app.main - INFO - Starting processing for audit 3b8fe2d3-af20-4e18-ae87-7a3709337477
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:50:38,537 - app.main - INFO - Extracted 34 files for audit 3b8fe2d3-af20-4e18-ae87-7a3709337477
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:50:40,851 - app.main - INFO - Parsing document 1/34: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX
+2025-12-08 18:50:40,851 - app.main - INFO - Converting Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX to PDF for preview generation
+2025-12-08 18:50:40,862 - app.main - WARNING - Failed to convert/extract bbox for Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX: LibreOffice not installed. Required for DOCX/XLSX/PPTX preview generation. Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)
+2025-12-08 18:50:40,903 - app.main - INFO - Successfully parsed: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX
+2025-12-08 18:50:41,113 - app.main - INFO - Parsing document 2/34: 8a. Rehydrate Cap Table.xlsx
+2025-12-08 18:50:41,113 - app.main - INFO - Converting 8a. Rehydrate Cap Table.xlsx to PDF for preview generation
+2025-12-08 18:50:41,123 - app.main - WARNING - Failed to convert/extract bbox for 8a. Rehydrate Cap Table.xlsx: LibreOffice not installed. Required for DOCX/XLSX/PPTX preview generation. Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)
+2025-12-08 18:50:41,138 - app.main - INFO - Successfully parsed: 8a. Rehydrate Cap Table.xlsx
+2025-12-08 18:50:41,206 - app.main - INFO - Parsing document 3/34: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:50:41,206 - app.main - INFO - Extracting bbox data from 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:50:41,255 - app.main - INFO - Extracted 70 text spans from 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:50:41,620 - app.main - INFO - Successfully parsed: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:50:41,673 - app.main - INFO - Parsing document 4/34: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx
+2025-12-08 18:50:41,673 - app.main - INFO - Converting Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx to PDF for preview generation
+2025-12-08 18:50:41,683 - app.main - WARNING - Failed to convert/extract bbox for Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx: LibreOffice not installed. Required for DOCX/XLSX/PPTX preview generation. Install with: brew install libreoffice (macOS) or apt-get install libreoffice (Linux)
+2025-12-08 18:50:41,696 - app.main - INFO - Successfully parsed: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx
+2025-12-08 18:50:41,761 - app.main - INFO - Parsing document 5/34: 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+2025-12-08 18:50:41,761 - app.main - INFO - Extracting bbox data from 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:50:42,565 - app.main - INFO - Extracted 0 text spans from 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:02,694 - app.main - ERROR - Timeout parsing 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf after 20 seconds
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:02,695 - app.main - INFO - Attempting fallback extraction for 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+2025-12-08 18:51:03,517 - app.main - INFO - Fallback extraction succeeded for 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:04,701 - app.main - INFO - Parsing document 6/34: 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:51:04,713 - app.main - INFO - Extracting bbox data from 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:51:04,792 - app.main - INFO - Extracted 335 text spans from 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+find_tables: exception occurred: not a textpage of this page
+2025-12-08 18:51:06,994 - app.main - INFO - Successfully parsed: 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:51:07,103 - app.main - INFO - Parsing document 7/34: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:51:07,115 - app.main - INFO - Extracting bbox data from 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:51:07,184 - app.main - INFO - Extracted 341 text spans from 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+find_tables: exception occurred: not a textpage of this page
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:15,746 - app.main - INFO - Successfully parsed: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:51:15,799 - app.main - INFO - Parsing document 8/34: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:51:15,799 - app.main - INFO - Extracting bbox data from 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:51:15,822 - app.main - INFO - Extracted 68 text spans from 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:51:16,038 - app.main - INFO - Successfully parsed: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:51:16,092 - app.main - INFO - Parsing document 9/34: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:51:16,092 - app.main - INFO - Extracting bbox data from 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:51:16,208 - app.main - INFO - Extracted 222 text spans from 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:16,965 - app.main - INFO - Successfully parsed: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+2025-12-08 18:51:17,018 - app.main - INFO - Parsing document 10/34: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:51:17,018 - app.main - INFO - Extracting bbox data from 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:51:17,062 - app.main - INFO - Extracted 92 text spans from 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:51:17,408 - app.main - INFO - Successfully parsed: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:18,536 - app.main - INFO - Parsing document 11/34: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:51:18,537 - app.main - INFO - Extracting bbox data from 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:51:18,681 - app.main - INFO - Extracted 253 text spans from 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:51:19,560 - app.main - INFO - Successfully parsed: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:51:19,614 - app.main - INFO - Parsing document 12/34: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:51:19,614 - app.main - INFO - Extracting bbox data from 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:51:20,108 - app.main - INFO - Extracted 796 text spans from 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:23,706 - app.main - INFO - Successfully parsed: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:51:23,759 - app.main - INFO - Parsing document 13/34: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:51:23,760 - app.main - INFO - Extracting bbox data from 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:51:23,782 - app.main - INFO - Extracted 68 text spans from 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:51:23,991 - app.main - INFO - Successfully parsed: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:51:24,045 - app.main - INFO - Parsing document 14/34: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:51:24,045 - app.main - INFO - Extracting bbox data from 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:51:24,080 - app.main - INFO - Extracted 111 text spans from 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:51:24,289 - app.main - INFO - Successfully parsed: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:51:24,342 - app.main - INFO - Parsing document 15/34: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:51:24,342 - app.main - INFO - Extracting bbox data from 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:51:24,352 - app.main - INFO - Extracted 27 text spans from 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:51:24,423 - app.main - INFO - Successfully parsed: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:25,491 - app.main - INFO - Parsing document 16/34: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:51:25,492 - app.main - INFO - Extracting bbox data from 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:51:25,541 - app.main - INFO - Extracted 338 text spans from 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:33,770 - app.main - INFO - Successfully parsed: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:51:33,823 - app.main - INFO - Parsing document 17/34: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:51:33,823 - app.main - INFO - Extracting bbox data from 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:51:33,870 - app.main - INFO - Extracted 56 text spans from 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:51:34,210 - app.main - INFO - Successfully parsed: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:51:34,264 - app.main - INFO - Parsing document 18/34: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:51:34,265 - app.main - INFO - Extracting bbox data from 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:51:34,288 - app.main - INFO - Extracted 31 text spans from 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:34,429 - app.main - INFO - Successfully parsed: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:51:34,485 - app.main - INFO - Parsing document 19/34: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:51:34,486 - app.main - INFO - Extracting bbox data from 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:51:34,978 - app.main - INFO - Extracted 795 text spans from 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:38,611 - app.main - INFO - Successfully parsed: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:51:38,666 - app.main - INFO - Parsing document 20/34: 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:51:38,666 - app.main - INFO - Extracting bbox data from 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:51:39,410 - app.main - INFO - Extracted 0 text spans from 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:51:59,422 - app.main - ERROR - Timeout parsing 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf after 20 seconds
+2025-12-08 18:51:59,429 - app.main - INFO - Attempting fallback extraction for 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:52:00,275 - app.main - INFO - Fallback extraction succeeded for 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:01,440 - app.main - INFO - Parsing document 21/34: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:52:01,447 - app.main - INFO - Extracting bbox data from 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:52:01,631 - app.main - INFO - Extracted 259 text spans from 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:02,935 - app.main - INFO - Successfully parsed: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:52:03,082 - app.main - INFO - Parsing document 22/34: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:52:03,082 - app.main - INFO - Extracting bbox data from 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:52:03,630 - app.main - INFO - Extracted 797 text spans from 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+find_tables: exception occurred: not a textpage of this page
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:08,646 - app.main - INFO - Successfully parsed: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:52:08,701 - app.main - INFO - Parsing document 23/34: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:52:08,702 - app.main - INFO - Extracting bbox data from 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:52:08,751 - app.main - INFO - Extracted 82 text spans from 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:52:09,104 - app.main - INFO - Successfully parsed: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:52:09,160 - app.main - INFO - Parsing document 24/34: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:52:09,160 - app.main - INFO - Extracting bbox data from 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:52:09,700 - app.main - INFO - Extracted 700 text spans from 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:15,487 - app.main - INFO - Successfully parsed: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:52:15,543 - app.main - INFO - Parsing document 25/34: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:52:15,543 - app.main - INFO - Extracting bbox data from 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:52:15,595 - app.main - INFO - Extracted 341 text spans from 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:24,539 - app.main - INFO - Successfully parsed: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:25,780 - app.main - INFO - Parsing document 26/34: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:52:25,781 - app.main - INFO - Extracting bbox data from 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:52:25,828 - app.main - INFO - Extracted 67 text spans from 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:52:26,048 - app.main - INFO - Successfully parsed: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:52:26,105 - app.main - INFO - Parsing document 27/34: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:52:26,105 - app.main - INFO - Extracting bbox data from 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:52:26,230 - app.main - INFO - Extracted 225 text spans from 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:27,013 - app.main - INFO - Successfully parsed: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:52:27,070 - app.main - INFO - Parsing document 28/34: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:52:27,070 - app.main - INFO - Extracting bbox data from 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:52:27,210 - app.main - INFO - Extracted 260 text spans from 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:52:28,054 - app.main - INFO - Successfully parsed: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:52:28,111 - app.main - INFO - Parsing document 29/34: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:52:28,112 - app.main - INFO - Extracting bbox data from 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:52:28,237 - app.main - INFO - Extracted 225 text spans from 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:29,018 - app.main - INFO - Successfully parsed: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:52:29,074 - app.main - INFO - Parsing document 30/34: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:52:29,075 - app.main - INFO - Extracting bbox data from 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:52:29,716 - app.main - INFO - Extracted 754 text spans from 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:38,944 - app.main - INFO - Successfully parsed: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:52:40,040 - app.main - INFO - Parsing document 31/34: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:52:40,041 - app.main - INFO - Extracting bbox data from 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:52:40,090 - app.main - INFO - Extracted 9 text spans from 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:51,096 - app.main - INFO - Successfully parsed: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:52:51,154 - app.main - INFO - Parsing document 32/34: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:52:51,155 - app.main - INFO - Extracting bbox data from 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:52:51,663 - app.main - INFO - Extracted 823 text spans from 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:55,129 - app.main - INFO - Successfully parsed: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:52:55,184 - app.main - INFO - Parsing document 33/34: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:52:55,184 - app.main - INFO - Extracting bbox data from 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:52:55,235 - app.main - INFO - Extracted 82 text spans from 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:52:55,626 - app.main - INFO - Successfully parsed: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:56,678 - app.main - INFO - Parsing document 34/34: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:52:56,679 - app.main - INFO - Extracting bbox data from 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:52:56,735 - app.main - INFO - Extracted 83 text spans from 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:52:56,943 - app.main - INFO - Successfully parsed: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:52:57,000 - app.main - INFO - Parsed 34 documents for audit 3b8fe2d3-af20-4e18-ae87-7a3709337477
+2025-12-08 18:52:57,000 - app.processing - INFO - Starting 3-pass processing for 34 documents
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:52:59,585 - app.processing - INFO - Classifying document 1/34: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX
+2025-12-08 18:52:59,586 - app.processing - INFO - Keyword match found: 'equity\s+incentive\s+plan|\d+\s+stock\s+plan' -> Equity Incentive Plan
+2025-12-08 18:52:59,586 - app.processing - INFO - Document classified by keywords: Rehydrate - Cap Table - 6 - SAN_FRANCISCO (Data Room) (3).XLSX -> Equity Incentive Plan
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:53:00,866 - app.processing - INFO - Classifying document 2/34: 8a. Rehydrate Cap Table.xlsx
+2025-12-08 18:53:00,867 - app.processing - INFO - Keyword match found: 'cap(?:italization)?\s+table|cap\s+table\s+summary|ownership\s+summary' -> Financial Statement
+2025-12-08 18:53:00,867 - app.processing - INFO - Document classified by keywords: 8a. Rehydrate Cap Table.xlsx -> Financial Statement
+2025-12-08 18:53:02,405 - app.processing - INFO - Classifying document 3/34: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf
+2025-12-08 18:53:02,406 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:53:02,406 - app.processing - INFO - Document classified by keywords: 6d. Rehydrate, Inc. - Common Stock Certificate - Tibaquira.pdf -> Charter Document
+2025-12-08 18:53:03,395 - app.processing - INFO - Classifying document 4/34: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:53:06,421 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:06,422 - app.processing - INFO - Document classified by Claude: Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx -> Option Grant Agreement
+2025-12-08 18:53:07,582 - app.processing - INFO - Classifying document 5/34: 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf
+INFO:     127.0.0.1:52051 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:53:09,870 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:09,871 - app.processing - INFO - Document classified by Claude: 6b. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Tibaquira.pdf -> Other
+2025-12-08 18:53:10,928 - app.processing - INFO - Classifying document 6/34: 6c. Rehydrate, Inc. - Restricted Stock Purchase Verification - Tibaquira.pdf
+2025-12-08 18:53:11,968 - app.processing - INFO - Classifying document 7/34: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf
+2025-12-08 18:53:11,969 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:11,969 - app.processing - INFO - Document classified by keywords: 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:12,936 - app.processing - INFO - Classifying document 8/34: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf
+2025-12-08 18:53:12,937 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:12,937 - app.processing - INFO - Document classified by keywords: 5f. Rehydrate, Inc. - Stock Assignment Separate from Certificate - Kan.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:13,917 - app.processing - INFO - Classifying document 9/34: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf
+INFO:     127.0.0.1:52200 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:53:16,577 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:16,578 - app.processing - INFO - Document classified by Claude: 5d. Rehydrate, Inc. - Assignment Agreement - Kan.pdf -> Assignment Agreement
+2025-12-08 18:53:17,633 - app.processing - INFO - Classifying document 10/34: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf
+2025-12-08 18:53:17,634 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:53:17,634 - app.processing - INFO - Document classified by keywords: 5c. Rehydrate, Inc. - Common Stock Certificate - Kan.pdf -> Charter Document
+2025-12-08 18:53:18,665 - app.processing - INFO - Classifying document 11/34: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf
+2025-12-08 18:53:18,666 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:18,666 - app.processing - INFO - Document classified by keywords: 5e. Rehydrate, Inc. - Joint Escrow Instructions - Kan.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:19,719 - app.processing - INFO - Classifying document 12/34: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf
+2025-12-08 18:53:19,720 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:19,720 - app.processing - INFO - Document classified by keywords: 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:20,773 - app.processing - INFO - Classifying document 13/34: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf
+2025-12-08 18:53:20,774 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:20,774 - app.processing - INFO - Document classified by keywords: 1h. Rehydrate, Inc. - Stock Assignment Separate from Certificate.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:21,763 - app.processing - INFO - Classifying document 14/34: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf
+2025-12-08 18:53:21,764 - app.processing - INFO - Keyword match found: 'consent\s+of\s+(board|directors|stockholders)|written\s+consent' -> Board/Shareholder Minutes
+2025-12-08 18:53:21,764 - app.processing - INFO - Document classified by keywords: 1f. Rehydrate, Inc. - Stockholder Consent of Indemnification Agreements.pdf -> Board/Shareholder Minutes
+2025-12-08 18:53:22,763 - app.processing - INFO - Classifying document 15/34: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf
+2025-12-08 18:53:27,287 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:27,291 - app.processing - INFO - Document classified by Claude: 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf -> Share Repurchase Agreement
+INFO:     127.0.0.1:52209 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:53:28,466 - app.processing - INFO - Classifying document 16/34: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf
+2025-12-08 18:53:28,466 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:28,466 - app.processing - INFO - Document classified by keywords: 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:29,684 - app.processing - INFO - Classifying document 17/34: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf
+2025-12-08 18:53:29,684 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:53:29,684 - app.processing - INFO - Document classified by keywords: 7c. Rehydrate, Inc. - Common Stock Certificate - Saleck.pdf -> Charter Document
+2025-12-08 18:53:30,827 - app.processing - INFO - Classifying document 18/34: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf
+2025-12-08 18:53:30,827 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:30,828 - app.processing - INFO - Document classified by keywords: 7d. Rehydrate, Inc. - Share Repurchase Email - Saleck.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:31,905 - app.processing - INFO - Classifying document 19/34: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf
+2025-12-08 18:53:31,905 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:31,905 - app.processing - INFO - Document classified by keywords: 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:33,047 - app.processing - INFO - Classifying document 20/34: 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf
+2025-12-08 18:53:35,428 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:35,429 - app.processing - INFO - Document classified by Claude: 7f. Rehydrate, Inc. - Employee Proprietary Information and Invention Assignment Agreement - Saleck.pdf -> Other
+2025-12-08 18:53:36,574 - app.processing - INFO - Classifying document 21/34: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf
+2025-12-08 18:53:36,575 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:36,575 - app.processing - INFO - Document classified by keywords: 4g. Rehydrate Inc. - Joint Escrow Instructions - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:37,955 - app.processing - INFO - Classifying document 22/34: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf
+2025-12-08 18:53:37,956 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:37,957 - app.processing - INFO - Document classified by keywords: 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:39,403 - app.processing - INFO - Classifying document 23/34: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf
+2025-12-08 18:53:39,404 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:53:39,404 - app.processing - INFO - Document classified by keywords: 4c. Rehydrate, Inc. - Common Stock Certificate - Ratcliffe.pdf -> Charter Document
+2025-12-08 18:53:40,914 - app.processing - INFO - Classifying document 24/34: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf
+2025-12-08 18:53:43,892 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:43,899 - app.processing - INFO - Document classified by Claude: 4e. Rehydrate Inc. - Form of Employee Proprietary Information and Invention Assignment Agreement - Ratcliffe.pdf -> IP/Proprietary Info Agreement
+2025-12-08 18:53:44,967 - app.processing - INFO - Classifying document 25/34: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf
+2025-12-08 18:53:44,968 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:44,969 - app.processing - INFO - Document classified by keywords: 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:45,979 - app.processing - INFO - Classifying document 26/34: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf
+2025-12-08 18:53:45,979 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:45,979 - app.processing - INFO - Document classified by keywords: 4f. Rehydrate Inc. - Stock Assignment Separate from Certificate - Ratcliffe.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:47,098 - app.processing - INFO - Classifying document 27/34: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf
+INFO:     127.0.0.1:52225 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:53:50,727 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:50,730 - app.processing - INFO - Document classified by Claude: 4d. Rehydrate, Inc. - Assignment Agreement - Ratcliffe.pdf -> Assignment Agreement
+2025-12-08 18:53:51,753 - app.processing - INFO - Classifying document 28/34: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf
+2025-12-08 18:53:51,754 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:53:51,754 - app.processing - INFO - Document classified by keywords: 3g. Rehydrate, Inc. - Joint Escrow Instructions - Sortor.pdf -> Stock Purchase Agreement
+2025-12-08 18:53:53,265 - app.processing - INFO - Classifying document 29/34: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf
+2025-12-08 18:53:56,102 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:53:56,103 - app.processing - INFO - Document classified by Claude: 3e. Rehydrate, Inc. - Assignment Agreement - Sortor.pdf -> Assignment Agreement
+2025-12-08 18:53:57,133 - app.processing - INFO - Classifying document 30/34: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf
+2025-12-08 18:53:57,133 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:53:57,133 - app.processing - INFO - Document classified by keywords: 3f. Rehydrate, Inc. - Indemnification Agreement - Sortor.pdf -> Charter Document
+2025-12-08 18:53:58,301 - app.processing - INFO - Classifying document 31/34: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf
+2025-12-08 18:54:00,901 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:54:00,904 - app.processing - INFO - Document classified by Claude: 3b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Sortor.pdf -> Other
+INFO:     127.0.0.1:52231 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:54:01,962 - app.processing - INFO - Classifying document 32/34: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf
+2025-12-08 18:54:01,963 - app.processing - INFO - Keyword match found: 'stock\s+purchase\s+agreement|restricted\s+stock\s+purchase' -> Stock Purchase Agreement
+2025-12-08 18:54:01,963 - app.processing - INFO - Document classified by keywords: 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf -> Stock Purchase Agreement
+2025-12-08 18:54:03,202 - app.processing - INFO - Classifying document 33/34: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf
+2025-12-08 18:54:03,204 - app.processing - INFO - Keyword match found: 'certificate\s+of\s+(incorporation|formation)' -> Charter Document
+2025-12-08 18:54:03,204 - app.processing - INFO - Document classified by keywords: 3c. Rehydrate, Inc. - Common Stock Certificate - Sortor.pdf -> Charter Document
+2025-12-08 18:54:04,207 - app.processing - INFO - Classifying document 34/34: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf
+2025-12-08 18:54:04,207 - app.processing - INFO - Keyword match found: '83\s*\(\s*b\s*\)' -> 83(b) Election
+2025-12-08 18:54:04,207 - app.processing - INFO - Document classified by keywords: 3d. Rehydrate, Inc - 83(b) Election - Sortor.pdf -> 83(b) Election
+2025-12-08 18:54:04,207 - app.processing - INFO - Pass 1 complete: Classified 34 documents
+INFO:     127.0.0.1:52262 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:54:49,352 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:54:54,524 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:54:54,526 - app.processing - INFO - Generated preview and summary for Rehydrate, Inc. - Dr. Tibaquira Vesting.xlsx: None granted 100,000 Common options at N/A strike price on 2023-04-28
+2025-12-08 18:54:59,713 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:54:59,716 - app.processing - INFO - No numbers to highlight for doc 6547d8fc-cfe9-448c-bd9b-d25eee1d8252, skipping preview generation
+2025-12-08 18:54:59,716 - app.processing - INFO - Generated preview and summary for 5b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Kan.pdf: Justin Kan received N/A Restricted Stock shares at $0.0100 per share on None
+2025-12-08 18:55:05,651 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:10,766 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:16,549 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:22,297 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:22,384 - app.processing - INFO - Generated preview for doc 5796f1ca-b8e8-46a8-8ee6-cd0e8c17cf22: 2 highlights, 216620 bytes
+2025-12-08 18:55:22,385 - app.processing - INFO - Generated preview and summary for 5a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Kan.pdf: Justin Kan received 100,000 Common Stock shares at $0.0001 per share on 2023-11-08
+2025-12-08 18:55:28,927 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:34,311 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:38,255 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:38,256 - app.processing - INFO - Extracted repurchase from 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf: shareholder='Tyler Saleck', shares=None, class='Stock'
+2025-12-08 18:55:38,256 - app.processing - INFO - No numbers to highlight for doc 71a33f28-875f-48a9-9738-d0a8e9a82801, skipping preview generation
+2025-12-08 18:55:38,256 - app.processing - INFO - Generated preview and summary for 7e. Rehydrate, Inc. - Share Repurchase Receipt - Saleck.pdf: Company repurchased N/A Stock shares from Tyler Saleck on 2024-02-06
+INFO:     127.0.0.1:52293 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:55:43,102 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:43,104 - app.processing - INFO - No numbers to highlight for doc ed4ddc3d-ad83-4dab-b61d-f41f1dbdaf77, skipping preview generation
+2025-12-08 18:55:43,104 - app.processing - INFO - Generated preview and summary for 7b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Saleck.pdf: Tyler Saleck received N/A Restricted Stock shares at $0.0100 per share on None
+2025-12-08 18:55:47,142 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:52,528 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:57,657 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:55:57,736 - app.processing - INFO - Generated preview for doc 40c10a15-083f-4110-aae0-cb6a8cd397a7: 2 highlights, 230848 bytes
+2025-12-08 18:55:57,737 - app.processing - INFO - Generated preview and summary for 7a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Saleck.pdf: Tyler Saleck received 100,000 Common Stock shares at $0.0001 per share on 2023-11-09
+2025-12-08 18:56:05,328 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:10,219 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:10,293 - app.processing - INFO - Generated preview for doc 04d11ef1-deb9-4b58-b811-484c2967817f: 2 highlights, 229996 bytes
+2025-12-08 18:56:10,293 - app.processing - INFO - Generated preview and summary for 4a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Ratcliffe.pdf: Christopher Ratcliffe received 100,000 Common Stock shares at $0.0001 per share on 2023-11-09
+2025-12-08 18:56:14,137 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:19,872 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:19,873 - app.processing - INFO - No numbers to highlight for doc 09e2a5a5-fbba-4e31-8d18-611944bd6520, skipping preview generation
+2025-12-08 18:56:19,873 - app.processing - INFO - Generated preview and summary for 4b. Rehydrate, Inc. - Restricted Stock Purchase Verification - Ratcliffe.pdf: Christopher Ratcliffe received N/A Restricted Stock shares at $0.0100 per share on None
+INFO:     127.0.0.1:52307 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+2025-12-08 18:56:26,744 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:33,723 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:39,065 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:45,941 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:46,035 - app.processing - INFO - Generated preview for doc dbbb1faa-2efb-4e20-a601-a385328c09ab: 2 highlights, 409700 bytes
+2025-12-08 18:56:46,037 - app.processing - INFO - Generated preview and summary for 3a. Rehydrate, Inc. - Restricted Stock Purchase Agreement - Sortor.pdf: Jake Sortor received 9,000,000 Common Stock shares at $0.0001 per share on 2023-01-20
+2025-12-08 18:56:50,133 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:56:51,312 - app.processing - INFO - Pass 2 complete: Extracted data from 34 documents
+2025-12-08 18:56:52,427 - app.processing - INFO - Extracted 4 equity transactions from documents
+2025-12-08 18:56:52,428 - app.processing - INFO - Matching 4 transactions with 7 approval documents via batch Claude call...
+2025-12-08 18:57:01,867 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:57:01,868 - app.processing - INFO - Batch approval matching complete: 4 matches processed
+2025-12-08 18:57:04,423 - app.processing - INFO - Inserted 4 equity events into database
+2025-12-08 18:57:05,472 - app.processing - INFO - Built timeline programmatically: 6 events
+2025-12-08 18:57:05,472 - app.processing - INFO - Using programmatic timeline (6 events)
+2025-12-08 18:57:06,467 - app.processing - INFO - Repurchase shares=None for Tyler Saleck, attempting to infer from issuances...
+2025-12-08 18:57:06,467 - app.processing - WARNING - Could not infer repurchase shares for Tyler Saleck - no matching issuances found
+2025-12-08 18:57:06,467 - app.processing - INFO - Adjusted last cap table entry by -0.01% to ensure 100% total
+2025-12-08 18:57:06,467 - app.processing - INFO - Built cap table programmatically: 4 entries
+2025-12-08 18:57:07,508 - app.processing - INFO - Deterministic checks found 1 issues
+2025-12-08 18:57:33,369 - httpx - INFO - HTTP Request: POST https://api.anthropic.com/v1/messages "HTTP/1.1 200 OK"
+2025-12-08 18:57:33,372 - app.processing - INFO - Total issues: 18 (1 deterministic, 17 AI-detected)
+2025-12-08 18:57:34,433 - app.processing - INFO - Pass 3 complete: Generated timeline, cap table, and issues
+2025-12-08 18:57:39,518 - app.processing - INFO - Audit 3b8fe2d3-af20-4e18-ae87-7a3709337477 completed successfully
+2025-12-08 18:57:39,535 - app.main - INFO - Successfully completed audit 3b8fe2d3-af20-4e18-ae87-7a3709337477
+INFO:     127.0.0.1:52329 - "GET /status/3b8fe2d3-af20-4e18-ae87-7a3709337477 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52329 - "GET /api/audits/3b8fe2d3-af20-4e18-ae87-7a3709337477/events HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52329 - "GET /api/audits/3b8fe2d3-af20-4e18-ae87-7a3709337477/captable?as_of_date=2023-11-09 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52329 - "GET /api/audits/3b8fe2d3-af20-4e18-ae87-7a3709337477/options?as_of_date=2023-11-09 HTTP/1.1" 200 OK
