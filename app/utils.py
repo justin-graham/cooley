@@ -7,7 +7,8 @@ import os
 import logging
 import zipfile
 import tempfile
-from typing import List, Dict, Any
+import chardet
+from typing import List, Dict, Any, Tuple
 import pymupdf4llm
 import pymupdf as fitz
 from docx import Document
@@ -15,6 +16,12 @@ import pandas as pd
 from pptx import Presentation
 
 logger = logging.getLogger(__name__)
+
+# Supported file extensions for document processing
+SUPPORTED_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.pptx', '.png', '.jpg', '.jpeg', '.gif', '.bmp'}
+
+# File extensions that are always skipped (system files, etc.)
+SKIP_EXTENSIONS = {'.ds_store', '.gitkeep', '.gitignore', '.thumbs.db'}
 
 try:
     from PIL import Image
@@ -41,9 +48,12 @@ def unzip_file(zip_path: str) -> List[str]:
     # Recursively find all files (not directories)
     file_paths = []
     for root, dirs, files in os.walk(extract_dir):
+        # Skip __MACOSX directories entirely
+        if '__MACOSX' in root:
+            continue
         for file in files:
             # Skip hidden files and system files
-            if not file.startswith('.') and not file.startswith('__MACOSX'):
+            if not file.startswith('.'):
                 file_paths.append(os.path.join(root, file))
 
     return file_paths
@@ -482,4 +492,325 @@ def validate_zip_file(file_path: str, max_size_mb: int = 50) -> tuple[bool, str]
     if not zipfile.is_zipfile(file_path):
         return False, "File is not a valid ZIP archive"
 
+    # Check decompressed size and file count to prevent zip bombs
+    try:
+        with zipfile.ZipFile(file_path, 'r') as zf:
+            total_uncompressed = sum(info.file_size for info in zf.infolist())
+            file_count = len([info for info in zf.infolist() if not info.is_dir()])
+            max_uncompressed_mb = 500
+            max_file_count = 2000
+            if total_uncompressed > max_uncompressed_mb * 1024 * 1024:
+                return False, f"Archive too large when extracted ({total_uncompressed / (1024*1024):.0f}MB). Maximum is {max_uncompressed_mb}MB"
+            if file_count > max_file_count:
+                return False, f"Archive contains too many files ({file_count}). Maximum is {max_file_count}"
+    except zipfile.BadZipFile:
+        return False, "File is a corrupt ZIP archive"
+
     return True, ""
+
+
+def detect_encoding(file_path: str) -> str:
+    """
+    Detect the encoding of a text file using chardet.
+
+    Args:
+        file_path: Path to the file
+
+    Returns:
+        Detected encoding (e.g., 'utf-8', 'latin-1', 'windows-1252')
+    """
+    with open(file_path, 'rb') as f:
+        raw_data = f.read(10000)  # Read first 10KB for detection
+        result = chardet.detect(raw_data)
+        return result.get('encoding', 'utf-8') or 'utf-8'
+
+
+def normalize_text_encoding(text: str) -> str:
+    """
+    Normalize text by removing problematic characters and ensuring clean UTF-8.
+
+    Args:
+        text: Input text string
+
+    Returns:
+        Cleaned text safe for PostgreSQL storage
+    """
+    if not text:
+        return ''
+    # Remove NULL bytes and control characters that break PostgreSQL
+    text = text.replace('\x00', '')
+    # Normalize line endings
+    text = text.replace('\r\n', '\n').replace('\r', '\n')
+    return text
+
+
+def prevalidate_zip_contents(zip_path: str) -> Dict[str, Any]:
+    """
+    Pre-validate zip contents before extraction.
+    Scans for potential issues without extracting files.
+
+    Args:
+        zip_path: Path to the zip file
+
+    Returns:
+        Dictionary with validation results:
+        - valid_files: List of file paths that can be processed
+        - skipped_files: List of {path, reason} for files that will be skipped
+        - warnings: List of warning messages
+        - has_nested_folders: Boolean
+        - duplicate_basenames: Dict mapping basename to list of full paths
+    """
+    result = {
+        'valid_files': [],
+        'skipped_files': [],
+        'warnings': [],
+        'has_nested_folders': False,
+        'duplicate_basenames': {}
+    }
+
+    seen_basenames = {}  # Track duplicate filenames
+
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            for zip_info in zip_ref.infolist():
+                # Skip directories
+                if zip_info.is_dir():
+                    continue
+
+                file_path = zip_info.filename
+                basename = os.path.basename(file_path)
+
+                # Skip hidden files, system files, and anything inside __MACOSX
+                if basename.startswith('.') or '__MACOSX' in file_path:
+                    result['skipped_files'].append({
+                        'path': file_path,
+                        'reason': 'Hidden or system file'
+                    })
+                    continue
+
+                # Check for nested folders
+                if '/' in file_path:
+                    result['has_nested_folders'] = True
+
+                # Get file extension
+                ext = os.path.splitext(basename)[1].lower()
+
+                # Skip known system extensions
+                if ext in SKIP_EXTENSIONS:
+                    result['skipped_files'].append({
+                        'path': file_path,
+                        'reason': f'System file ({ext})'
+                    })
+                    continue
+
+                # Check for supported extensions
+                if ext and ext not in SUPPORTED_EXTENSIONS:
+                    result['skipped_files'].append({
+                        'path': file_path,
+                        'reason': f'Unsupported file type ({ext})'
+                    })
+                    continue
+
+                # Check for empty files
+                if zip_info.file_size == 0:
+                    result['skipped_files'].append({
+                        'path': file_path,
+                        'reason': 'Empty file (0 bytes)'
+                    })
+                    continue
+
+                # Track duplicate basenames
+                if basename in seen_basenames:
+                    if basename not in result['duplicate_basenames']:
+                        result['duplicate_basenames'][basename] = [seen_basenames[basename]]
+                    result['duplicate_basenames'][basename].append(file_path)
+                else:
+                    seen_basenames[basename] = file_path
+
+                # File passed all checks
+                result['valid_files'].append(file_path)
+
+    except zipfile.BadZipFile as e:
+        result['warnings'].append(f"Corrupt zip file: {str(e)}")
+    except Exception as e:
+        result['warnings'].append(f"Error scanning zip: {str(e)}")
+
+    # Generate warnings for duplicates
+    for basename, paths in result['duplicate_basenames'].items():
+        result['warnings'].append(
+            f"Duplicate filename '{basename}' found in {len(paths)} locations - will use folder path to distinguish"
+        )
+
+    return result
+
+
+def unzip_file_robust(zip_path: str) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Extract a zip file with robust handling of edge cases.
+    Returns both successfully extracted files and skipped/failed files.
+
+    Args:
+        zip_path: Path to the .zip file
+
+    Returns:
+        Tuple of:
+        - extracted_files: List of {path, original_name, parse_status}
+        - skipped_files: List of {original_name, reason, parse_status}
+    """
+    extract_dir = tempfile.mkdtemp()
+    extracted_files = []
+    skipped_files = []
+
+    # Pre-validate contents
+    validation = prevalidate_zip_contents(zip_path)
+
+    # Log warnings
+    for warning in validation['warnings']:
+        logger.warning(warning)
+
+    # Track skipped files
+    for skipped in validation['skipped_files']:
+        skipped_files.append({
+            'original_name': skipped['path'],
+            'reason': skipped['reason'],
+            'parse_status': 'skipped'
+        })
+
+    try:
+        with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+            for file_path in validation['valid_files']:
+                try:
+                    # Handle duplicate filenames by including folder structure
+                    basename = os.path.basename(file_path)
+                    if basename in validation['duplicate_basenames']:
+                        # Use folder path to create unique name
+                        folder = os.path.dirname(file_path).replace('/', '_').replace('\\', '_')
+                        unique_name = f"{folder}_{basename}" if folder else basename
+                    else:
+                        unique_name = basename
+
+                    # Extract the file
+                    extracted_path = zip_ref.extract(file_path, extract_dir)
+
+                    # Verify file was extracted and is readable
+                    if os.path.exists(extracted_path) and os.path.getsize(extracted_path) > 0:
+                        extracted_files.append({
+                            'path': extracted_path,
+                            'original_name': unique_name,
+                            'parse_status': 'pending'
+                        })
+                    else:
+                        skipped_files.append({
+                            'original_name': file_path,
+                            'reason': 'File extraction failed or empty',
+                            'parse_status': 'error'
+                        })
+
+                except Exception as e:
+                    logger.warning(f"Failed to extract {file_path}: {e}")
+                    skipped_files.append({
+                        'original_name': file_path,
+                        'reason': f'Extraction error: {str(e)}',
+                        'parse_status': 'error'
+                    })
+
+    except Exception as e:
+        logger.error(f"Failed to open zip file: {e}")
+        raise
+
+    return extracted_files, skipped_files
+
+
+def parse_document_robust(file_path: str) -> Dict[str, Any]:
+    """
+    Parse a document with robust error handling and encoding detection.
+    Returns parse_status to track success/failure.
+
+    Args:
+        file_path: Path to document file
+
+    Returns:
+        Dictionary with keys:
+        - filename: str
+        - type: str (pdf, docx, xlsx, pptx, or unknown)
+        - text: str (extracted text, or empty if error)
+        - parse_status: str ('success', 'partial', 'error')
+        - error: str (error message if parsing failed, otherwise absent)
+    """
+    filename = os.path.basename(file_path)
+    file_ext = os.path.splitext(filename)[1].lower()
+
+    result = {
+        'filename': filename,
+        'type': file_ext.lstrip('.'),
+        'text': '',
+        'parse_status': 'pending'
+    }
+
+    try:
+        # Route to appropriate parser based on extension
+        if file_ext == '.pdf':
+            try:
+                result['text'] = extract_from_pdf(file_path)
+                result['parse_status'] = 'success'
+            except NameError as e:
+                # Library bug in pymupdf4llm - use fallback extraction
+                logger.warning(f"pymupdf4llm bug for {filename}, using fallback: {e}")
+                result['text'] = extract_from_pdf_fallback(file_path)
+                result['parse_status'] = 'partial'  # Fallback means partial extraction
+            except Exception as e:
+                # Try fallback for any PDF error
+                logger.warning(f"PDF extraction failed for {filename}, trying fallback: {e}")
+                try:
+                    result['text'] = extract_from_pdf_fallback(file_path)
+                    result['parse_status'] = 'partial'
+                except Exception as fallback_error:
+                    result['error'] = f"PDF parsing failed: {str(e)}"
+                    result['parse_status'] = 'error'
+
+        elif file_ext == '.docx':
+            result['text'] = extract_from_docx(file_path)
+            result['parse_status'] = 'success'
+
+        elif file_ext == '.xlsx':
+            result['text'] = extract_from_xlsx(file_path)
+            result['parse_status'] = 'success'
+
+        elif file_ext == '.pptx':
+            result['text'] = extract_from_pptx(file_path)
+            result['parse_status'] = 'success'
+
+        elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']:
+            result['text'] = extract_from_image(file_path)
+            result['parse_status'] = 'success'
+
+        elif not file_ext or file_ext == '.':
+            # Files without extension - try to read as text with encoding detection
+            try:
+                encoding = detect_encoding(file_path)
+                with open(file_path, 'r', encoding=encoding, errors='replace') as f:
+                    result['text'] = f.read(10000)  # First 10000 chars
+                result['parse_status'] = 'success'
+            except Exception as e:
+                result['error'] = f"Unsupported file type: no extension"
+                result['parse_status'] = 'error'
+
+        else:
+            # Unsupported file type
+            result['error'] = f"Unsupported file type: {file_ext}"
+            result['parse_status'] = 'error'
+
+        # Normalize text encoding for all successful parses
+        if result['text']:
+            result['text'] = normalize_text_encoding(result['text'])
+
+        # Check if extraction yielded any content
+        if result['parse_status'] != 'error' and (not result['text'] or len(result['text'].strip()) < 10):
+            result['error'] = "Document appears to be empty or unreadable"
+            result['parse_status'] = 'error'
+
+    except Exception as e:
+        result['error'] = f"Failed to parse: {str(e)}"
+        result['parse_status'] = 'error'
+
+    return result

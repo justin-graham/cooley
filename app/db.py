@@ -1,25 +1,60 @@
 """
 Database connection and CRUD operations for audit records.
-Uses Postgres with psycopg2 for simple, reliable connections.
+Uses Postgres with psycopg2 and connection pooling for efficient access.
 """
 
 import os
 import json
 import logging
 import psycopg2
+import psycopg2.pool
+from contextlib import contextmanager
 from decimal import Decimal
 from psycopg2.extras import Json, RealDictCursor
 from typing import Optional, Dict, Any
 
 logger = logging.getLogger(__name__)
 
+# Module-level connection pool (lazy-initialized)
+_pool = None
+
+
+def _get_pool():
+    """Get or create the connection pool (lazy initialization)."""
+    global _pool
+    if _pool is None:
+        database_url = os.getenv("DATABASE_URL")
+        if not database_url:
+            raise ValueError("DATABASE_URL environment variable not set")
+        _pool = psycopg2.pool.ThreadedConnectionPool(
+            minconn=2,
+            maxconn=10,
+            dsn=database_url
+        )
+    return _pool
+
 
 def get_connection():
-    """Get a database connection using DATABASE_URL from environment."""
-    database_url = os.getenv("DATABASE_URL")
-    if not database_url:
-        raise ValueError("DATABASE_URL environment variable not set")
-    return psycopg2.connect(database_url)
+    """Get a database connection from the pool."""
+    return _get_pool().getconn()
+
+
+def _return_connection(conn):
+    """Return a connection to the pool."""
+    try:
+        _get_pool().putconn(conn)
+    except Exception:
+        pass
+
+
+@contextmanager
+def get_db():
+    """Context manager for database connections. Returns connection to pool on exit."""
+    conn = get_connection()
+    try:
+        yield conn
+    finally:
+        _return_connection(conn)
 
 
 def create_audit(audit_id: str, upload_filename: Optional[str] = None, user_id: Optional[str] = None) -> None:
@@ -31,8 +66,7 @@ def create_audit(audit_id: str, upload_filename: Optional[str] = None, user_id: 
         upload_filename: Optional original filename of uploaded zip
         user_id: Optional UUID string of the user who created the audit
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -42,8 +76,6 @@ def create_audit(audit_id: str, upload_filename: Optional[str] = None, user_id: 
                 (audit_id, 'processing', 'Starting document extraction...', upload_filename, user_id)
             )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def update_progress(audit_id: str, progress_message: str) -> None:
@@ -56,20 +88,16 @@ def update_progress(audit_id: str, progress_message: str) -> None:
         progress_message: Human-readable progress text (e.g., "Classifying document 12/47...")
     """
     try:
-        conn = get_connection()
-        try:
+        with get_db() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     "UPDATE audits SET progress = %s WHERE id = %s",
                     (progress_message, audit_id)
                 )
             conn.commit()
-        finally:
-            conn.close()
     except Exception as e:
         # Log error but don't crash - progress updates are non-critical
         logger.error(f"Failed to update progress for audit {audit_id}: {e}")
-        print(f"WARNING: Failed to update progress for audit {audit_id}: {e}")
 
 
 def update_audit_results(audit_id: str, results: Dict[str, Any]) -> None:
@@ -86,8 +114,7 @@ def update_audit_results(audit_id: str, results: Dict[str, Any]) -> None:
             - issues: list of issue dicts
             - failed_documents: list of failed doc dicts (optional)
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -115,8 +142,6 @@ def update_audit_results(audit_id: str, results: Dict[str, Any]) -> None:
                 )
             )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def mark_error(audit_id: str, error_message: str) -> None:
@@ -127,8 +152,7 @@ def mark_error(audit_id: str, error_message: str) -> None:
         audit_id: UUID of the audit
         error_message: Description of what went wrong
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -141,8 +165,6 @@ def mark_error(audit_id: str, error_message: str) -> None:
                 ('error', 'Processing failed', error_message, audit_id)
             )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def get_audit(audit_id: str) -> Optional[Dict[str, Any]]:
@@ -155,14 +177,11 @@ def get_audit(audit_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dictionary with audit data, or None if not found
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute("SELECT * FROM audits WHERE id = %s", (audit_id,))
             row = cur.fetchone()
             return dict(row) if row else None
-    finally:
-        conn.close()
 
 
 def get_all_audits(user_id: Optional[str] = None) -> list[Dict[str, Any]]:
@@ -176,8 +195,7 @@ def get_all_audits(user_id: Optional[str] = None) -> list[Dict[str, Any]]:
     Returns:
         List of audit dictionaries with summary fields
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if user_id:
                 cur.execute(
@@ -211,8 +229,6 @@ def get_all_audits(user_id: Optional[str] = None) -> list[Dict[str, Any]]:
                 )
             rows = cur.fetchall()
             return [dict(row) for row in rows]
-    finally:
-        conn.close()
 
 
 # ============================================================================
@@ -220,7 +236,8 @@ def get_all_audits(user_id: Optional[str] = None) -> list[Dict[str, Any]]:
 # ============================================================================
 
 def insert_document(audit_id: str, filename: str, classification: Optional[str] = None,
-                    extracted_data: Optional[Dict] = None, full_text: Optional[str] = None) -> str:
+                    extracted_data: Optional[Dict] = None, full_text: Optional[str] = None,
+                    parse_status: str = 'success', parse_error: Optional[str] = None) -> str:
     """
     Insert a document record and return its UUID.
 
@@ -230,26 +247,25 @@ def insert_document(audit_id: str, filename: str, classification: Optional[str] 
         classification: Document type (e.g., 'Stock Purchase Agreement')
         extracted_data: Structured data from Pass 2
         full_text: Parsed document text
+        parse_status: Parsing status ('success', 'partial', 'error', 'skipped')
+        parse_error: Error message if parse failed
 
     Returns:
         UUID string of the created document
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO documents (audit_id, filename, classification, extracted_data, full_text)
-                VALUES (%s, %s, %s, %s, %s)
+                INSERT INTO documents (audit_id, filename, classification, extracted_data, full_text, parse_status, parse_error)
+                VALUES (%s, %s, %s, %s, %s, %s, %s)
                 RETURNING id
                 """,
-                (audit_id, filename, classification, Json(extracted_data) if extracted_data else None, full_text)
+                (audit_id, filename, classification, Json(extracted_data) if extracted_data else None, full_text, parse_status, parse_error)
             )
             doc_id = cur.fetchone()[0]
         conn.commit()
         return str(doc_id)
-    finally:
-        conn.close()
 
 
 def get_documents_by_audit(audit_id: str) -> list[Dict[str, Any]]:
@@ -262,16 +278,13 @@ def get_documents_by_audit(audit_id: str) -> list[Dict[str, Any]]:
     Returns:
         List of document dictionaries
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT * FROM documents WHERE audit_id = %s ORDER BY created_at",
                 (audit_id,)
             )
             return [dict(row) for row in cur.fetchall()]
-    finally:
-        conn.close()
 
 
 def insert_equity_events(audit_id: str, events: list[Dict[str, Any]]) -> None:
@@ -297,8 +310,7 @@ def insert_equity_events(audit_id: str, events: list[Dict[str, Any]]) -> None:
     if not events:
         return
 
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor() as cur:
             for event in events:
                 cur.execute(
@@ -328,8 +340,6 @@ def insert_equity_events(audit_id: str, events: list[Dict[str, Any]]) -> None:
                     )
                 )
         conn.commit()
-    finally:
-        conn.close()
 
 
 def get_equity_events_by_audit(audit_id: str) -> list[Dict[str, Any]]:
@@ -342,8 +352,7 @@ def get_equity_events_by_audit(audit_id: str) -> list[Dict[str, Any]]:
     Returns:
         List of equity event dictionaries
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
@@ -365,8 +374,6 @@ def get_equity_events_by_audit(audit_id: str) -> list[Dict[str, Any]]:
                 }
                 for row in rows
             ]
-    finally:
-        conn.close()
 
 
 def get_option_grants(audit_id: str, as_of_date: Optional[str] = None) -> list[Dict[str, Any]]:
@@ -380,8 +387,7 @@ def get_option_grants(audit_id: str, as_of_date: Optional[str] = None) -> list[D
     Returns:
         List of option grant dicts with recipient, shares, strike_price, etc.
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             if as_of_date:
                 cur.execute(
@@ -421,7 +427,6 @@ def get_option_grants(audit_id: str, as_of_date: Optional[str] = None) -> list[D
 
             rows = cur.fetchall()
 
-            # Convert to dict list
             options = []
             for row in rows:
                 options.append({
@@ -435,9 +440,6 @@ def get_option_grants(audit_id: str, as_of_date: Optional[str] = None) -> list[D
 
             return options
 
-    finally:
-        conn.close()
-
 
 def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
     """
@@ -449,8 +451,7 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dictionary with document data, or None if not found
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 """
@@ -462,8 +463,6 @@ def get_document_by_id(doc_id: str) -> Optional[Dict[str, Any]]:
             )
             row = cur.fetchone()
             return dict(row) if row else None
-    finally:
-        conn.close()
 
 
 # ============================================================================
@@ -481,8 +480,7 @@ def create_user(username: str, password_hash: str) -> str:
     Returns:
         UUID string of the created user
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
@@ -495,8 +493,6 @@ def create_user(username: str, password_hash: str) -> str:
             user_id = cur.fetchone()[0]
         conn.commit()
         return str(user_id)
-    finally:
-        conn.close()
 
 
 def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
@@ -509,8 +505,7 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dictionary with user data (id, username, password_hash, created_at), or None if not found
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT id, username, password_hash, created_at FROM users WHERE username = %s",
@@ -518,8 +513,6 @@ def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
             )
             row = cur.fetchone()
             return dict(row) if row else None
-    finally:
-        conn.close()
 
 
 def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
@@ -532,8 +525,7 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dictionary with user data (id, username, created_at), or None if not found
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(
                 "SELECT id, username, created_at FROM users WHERE id = %s",
@@ -541,8 +533,6 @@ def get_user_by_id(user_id: str) -> Optional[Dict[str, Any]]:
             )
             row = cur.fetchone()
             return dict(row) if row else None
-    finally:
-        conn.close()
 
 
 def create_access_request(email: str) -> None:
@@ -552,13 +542,10 @@ def create_access_request(email: str) -> None:
     Args:
         email: Email address requesting access
     """
-    conn = get_connection()
-    try:
+    with get_db() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 "INSERT INTO access_requests (email) VALUES (%s)",
                 (email,)
             )
         conn.commit()
-    finally:
-        conn.close()

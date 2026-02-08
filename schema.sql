@@ -3,12 +3,47 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
--- Main audits table
+
+-- ============================================================================
+-- USERS TABLE (authentication)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS users (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    username TEXT UNIQUE NOT NULL,
+    password_hash TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+COMMENT ON TABLE users IS 'User accounts for authentication';
+
+
+-- ============================================================================
+-- ACCESS REQUESTS TABLE (invitation flow)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS access_requests (
+    id SERIAL PRIMARY KEY,
+    email TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+COMMENT ON TABLE access_requests IS 'Email addresses requesting platform access';
+
+
+-- ============================================================================
+-- AUDITS TABLE (main audit records)
+-- ============================================================================
+
 CREATE TABLE IF NOT EXISTS audits (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP DEFAULT NOW(),
     status TEXT NOT NULL CHECK (status IN ('processing', 'complete', 'error')),
     progress TEXT,  -- Current processing step for real-time updates
+
+    -- Ownership
+    user_id UUID REFERENCES users(id),
+    upload_filename TEXT,  -- Original filename of uploaded zip
 
     -- Final results (stored as JSONB for flexibility)
     company_name TEXT,
@@ -42,6 +77,8 @@ CREATE TABLE IF NOT EXISTS documents (
     classification TEXT,  -- Document type (e.g., 'Stock Purchase Agreement')
     extracted_data JSONB,  -- Structured data from Pass 2 extraction
     full_text TEXT,  -- Complete parsed document text
+    parse_status TEXT DEFAULT 'success' CHECK (parse_status IN ('success', 'partial', 'error', 'skipped')),  -- Document parsing status
+    parse_error TEXT,  -- Error message if parse failed
     created_at TIMESTAMP DEFAULT NOW()
 );
 

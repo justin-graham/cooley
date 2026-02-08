@@ -43,6 +43,7 @@
         <section class="landing-auth">
             <form id="auth-form" class="auth-form">
                 <div class="form-group">
+                    <label for="username" class="sr-only">Email</label>
                     <input
                         type="text"
                         id="username"
@@ -50,9 +51,11 @@
                         placeholder="email"
                         required
                         autocomplete="username"
+                        aria-label="Email address"
                     />
                 </div>
                 <div class="form-group">
+                    <label for="password" class="sr-only">Password</label>
                     <input
                         type="password"
                         id="password"
@@ -60,10 +63,11 @@
                         placeholder="password"
                         required
                         autocomplete="current-password"
+                        aria-label="Password"
                     />
                 </div>
                 <button type="submit" class="auth-submit">Sign In</button>
-                <div id="auth-error" class="auth-error" style="display: none;"></div>
+                <div id="auth-error" class="auth-error" role="alert" style="display: none;"></div>
             </form>
         </section>
     </div>

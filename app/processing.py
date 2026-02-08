@@ -10,6 +10,7 @@ import os
 import json
 import logging
 import time
+from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Dict, Any
 from anthropic import Anthropic, APITimeoutError, APIError, RateLimitError
@@ -95,6 +96,10 @@ def clean_document_dict(doc: Dict[str, Any]) -> Dict[str, Any]:
             cleaned[key] = clean_document_dict(value)
         elif isinstance(value, list):
             cleaned[key] = [clean_document_dict(item) if isinstance(item, dict) else clean_text_for_db(item) if isinstance(item, str) else item for item in value]
+        elif isinstance(value, Decimal):
+            cleaned[key] = float(value)
+        elif isinstance(value, (date, datetime)):
+            cleaned[key] = value.isoformat()
         else:
             cleaned[key] = value
     return cleaned
@@ -102,6 +107,78 @@ def clean_document_dict(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 # Initialize Claude client with 60 second timeout
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=60.0)
+
+
+# ============================================================================
+# SHARE CLASS NORMALIZATION
+# ============================================================================
+
+# Map various share class names to canonical forms
+SHARE_CLASS_ALIASES = {
+    # Common stock variants
+    'common': 'Common Stock',
+    'common stock': 'Common Stock',
+    'common shares': 'Common Stock',
+    'class a common': 'Common Stock',
+    'class a common stock': 'Common Stock',
+    'ordinary shares': 'Common Stock',
+    'ordinary stock': 'Common Stock',
+
+    # Series Seed variants
+    'series seed': 'Series Seed Preferred',
+    'series seed preferred': 'Series Seed Preferred',
+    'series seed preferred stock': 'Series Seed Preferred',
+    'seed preferred': 'Series Seed Preferred',
+
+    # Series A variants
+    'series a': 'Series A Preferred',
+    'series a preferred': 'Series A Preferred',
+    'series a preferred stock': 'Series A Preferred',
+    'series a-1': 'Series A Preferred',
+    'series a-1 preferred': 'Series A Preferred',
+
+    # Series B variants
+    'series b': 'Series B Preferred',
+    'series b preferred': 'Series B Preferred',
+    'series b preferred stock': 'Series B Preferred',
+
+    # Convertible instruments
+    'safe': 'SAFE',
+    'simple agreement for future equity': 'SAFE',
+    'convertible note': 'Convertible Note',
+    'convertible promissory note': 'Convertible Note',
+
+    # Options
+    'option': 'Option',
+    'stock option': 'Option',
+    'iso': 'Option',
+    'nso': 'Option',
+    'nqso': 'Option',
+}
+
+
+def normalize_share_class(share_class: str) -> str:
+    """
+    Normalize share class names to canonical forms for consistency.
+
+    Args:
+        share_class: Raw share class name from extraction
+
+    Returns:
+        Normalized canonical share class name
+    """
+    if not share_class:
+        return 'Common Stock'  # Default to common
+
+    # Normalize for lookup
+    normalized = share_class.lower().strip()
+
+    # Check alias map
+    if normalized in SHARE_CLASS_ALIASES:
+        return SHARE_CLASS_ALIASES[normalized]
+
+    # If not in map, return original with proper capitalization
+    return share_class.strip().title()
 
 
 # ============================================================================
@@ -192,39 +269,48 @@ def classify_by_keywords(text: str) -> tuple:
     return (None, None)
 
 
-def call_claude(prompt: str, max_tokens: int = 2048) -> str:
+def call_claude(prompt: str, max_tokens: int = 2048, max_retries: int = 3) -> str:
     """
     Call Claude API with a prompt and return the response text.
+    Retries with exponential backoff on rate limits and timeouts.
 
     Args:
         prompt: The prompt to send
         max_tokens: Maximum tokens in response
+        max_retries: Maximum retry attempts for transient errors
 
     Returns:
         Response text from Claude
 
     Raises:
-        APITimeoutError: If the request times out (60 seconds)
-        APIError: If there's an API error
+        APITimeoutError: If all retries exhausted on timeout
+        RateLimitError: If all retries exhausted on rate limit
+        APIError: If there's a non-retryable API error
     """
-    try:
-        message = client.messages.create(
-            model="claude-sonnet-4-5-20250929",
-            max_tokens=max_tokens,
-            temperature=0,  # Deterministic outputs for consistency
-            messages=[{
-                "role": "user",
-                "content": prompt
-            }]
-        )
-        return message.content[0].text
+    for attempt in range(max_retries):
+        try:
+            message = client.messages.create(
+                model="claude-sonnet-4-5-20250929",
+                max_tokens=max_tokens,
+                temperature=0,  # Deterministic outputs for consistency
+                messages=[{
+                    "role": "user",
+                    "content": prompt
+                }]
+            )
+            return message.content[0].text
 
-    except APITimeoutError as e:
-        logger.error(f"Claude API timeout after 60 seconds: {e}")
-        raise
-    except APIError as e:
-        logger.error(f"Claude API error: {e}")
-        raise
+        except (RateLimitError, APITimeoutError) as e:
+            wait_time = 2 ** (attempt + 1)  # 2s, 4s, 8s
+            if attempt < max_retries - 1:
+                logger.warning(f"Claude API {type(e).__name__} (attempt {attempt + 1}/{max_retries}), retrying in {wait_time}s...")
+                time.sleep(wait_time)
+            else:
+                logger.error(f"Claude API {type(e).__name__} after {max_retries} attempts: {e}")
+                raise
+        except APIError as e:
+            logger.error(f"Claude API error: {e}")
+            raise
 
 
 def parse_json_response(response_text: str) -> Any:
@@ -252,12 +338,18 @@ def parse_json_response(response_text: str) -> Any:
         text = text[:-3]
     text = text.strip()
 
-    # Extract JSON from surrounding text (look for [ or { to } or ])
-    json_match = re.search(r'(\[.*\]|\{.*\})', text, re.DOTALL)
+    # Attempt 1: Try parsing the cleaned text directly
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Attempt 2: Extract JSON from surrounding text (non-greedy match)
+    json_match = re.search(r'(\[[\s\S]*?\]|\{[\s\S]*?\})\s*$', text)
     if json_match:
         text = json_match.group(1)
 
-    # Attempt 1: Standard parsing
+    # Attempt 3: Standard parsing on extracted text
     try:
         return json.loads(text)
     except json.JSONDecodeError as e:
@@ -959,7 +1051,7 @@ def generate_event_summary(extracted_data: Dict[str, Any], event_type: str) -> s
     elif event_type == 'option_grant':
         return f"{shareholder} granted {shares_str} {share_class} options at {price_str} strike price on {date}"
     elif event_type == 'safe':
-        amount = extracted_data.get('investment_amount')
+        amount = extracted_data.get('amount') or extracted_data.get('investment_amount')
         amount_str = f"${amount:,}" if amount else "N/A"
         return f"{shareholder} invested {amount_str} via SAFE on {date}"
     elif event_type == 'repurchase':
@@ -1127,7 +1219,7 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
 def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     Build a basic cap table from raw equity data without AI synthesis.
-    Used as fallback when Claude API is rate limited.
+    Uses share class normalization for consistency.
 
     Args:
         equity_data: List of equity issuances
@@ -1135,12 +1227,15 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
     Returns:
         List of cap table entries with calculated ownership percentages
     """
-    # Aggregate by shareholder and share class
+    # Aggregate by shareholder and normalized share class
     aggregated = {}
     for item in equity_data:
         shareholder = item.get('shareholder') or item.get('investor') or item.get('recipient') or 'Unknown'
         shares = item.get('shares', 0)
-        share_class = item.get('share_class') or item.get('type', 'Common Stock')
+        raw_share_class = item.get('share_class') or item.get('type', 'Common Stock')
+
+        # Normalize share class for consistency
+        share_class = normalize_share_class(raw_share_class)
 
         key = (shareholder, share_class)
         if key not in aggregated:
@@ -1170,13 +1265,14 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
     # Sort by ownership percentage descending
     cap_table.sort(key=lambda x: x['ownership_pct'], reverse=True)
 
-    # Adjust last entry to ensure total = exactly 100.00%
+    # Adjust largest shareholder to ensure total = exactly 100.00%
+    # (Applying rounding error to the largest entry minimizes distortion)
     if cap_table:
         calculated_total = float(sum(entry['ownership_pct'] for entry in cap_table))
         if calculated_total != 100.0:
             adjustment = round(100.0 - calculated_total, 2)
-            cap_table[-1]['ownership_pct'] = round(cap_table[-1]['ownership_pct'] + adjustment, 2)
-            logger.info(f"Adjusted last cap table entry by {adjustment}% to ensure 100% total")
+            cap_table[0]['ownership_pct'] = round(cap_table[0]['ownership_pct'] + adjustment, 2)
+            logger.info(f"Adjusted largest cap table entry by {adjustment}% to ensure 100% total")
 
     return cap_table
 
@@ -1405,6 +1501,125 @@ def check_deterministic_issues(documents: List[Dict[str, Any]], cap_table: List[
                         'description': f"Repurchase from {shareholder} on {date} missing share count. Document: {filename}. Manual review required to determine repurchased share amount.",
                         'source_doc': filename
                     })
+
+    # ========================================================================
+    # PHASE C: Enhanced Issue Detection Rules
+    # ========================================================================
+
+    # CHRONOLOGICAL INTEGRITY: Formation must be earliest event
+    if timeline:
+        from datetime import datetime
+
+        formation_date = None
+        earliest_non_formation_date = None
+        earliest_non_formation_event = None
+
+        for event in timeline:
+            event_date = event.get('date', '')
+            event_type = event.get('event_type', '')
+
+            if not event_date:
+                continue
+
+            try:
+                dt = datetime.strptime(event_date, '%Y-%m-%d')
+
+                if event_type == 'formation':
+                    if formation_date is None or dt < formation_date:
+                        formation_date = dt
+                else:
+                    if earliest_non_formation_date is None or dt < earliest_non_formation_date:
+                        earliest_non_formation_date = dt
+                        earliest_non_formation_event = event
+            except ValueError:
+                continue
+
+        # Check if any events predate formation
+        if formation_date and earliest_non_formation_date:
+            if earliest_non_formation_date < formation_date:
+                issues.append({
+                    'severity': 'critical',
+                    'category': 'Chronological Integrity',
+                    'description': f"Event dated {earliest_non_formation_date.strftime('%Y-%m-%d')} ({earliest_non_formation_event.get('event_type', 'unknown')}) predates company formation ({formation_date.strftime('%Y-%m-%d')}). All corporate actions must occur after incorporation."
+                })
+
+    # OPTION POOL VALIDATION: Compare grants to declared pool size
+    # Look for equity incentive plan to find pool size
+    option_pool_size = None
+    for ext in extractions:
+        if 'Equity Incentive Plan' in ext.get('category', '') or 'Stock Plan' in ext.get('category', ''):
+            # Try to extract pool size from document
+            text = ext.get('text', '').lower()
+            import re
+            # Look for patterns like "reserve 1,000,000 shares" or "option pool of 2000000"
+            pool_patterns = [
+                r'(?:reserve|pool|allocated?|set aside)\s+(?:of\s+)?(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*(?:shares|options)',
+                r'(\d{1,3}(?:,\d{3})*(?:\.\d+)?)\s*shares?\s+(?:reserved|allocated|in\s+the\s+pool)',
+            ]
+            for pattern in pool_patterns:
+                match = re.search(pattern, text)
+                if match:
+                    try:
+                        option_pool_size = int(match.group(1).replace(',', ''))
+                        break
+                    except (ValueError, AttributeError):
+                        pass
+            if option_pool_size:
+                break
+
+    # Calculate total option grants
+    total_option_grants = 0
+    for ext in extractions:
+        if 'option_data' in ext:
+            option = ext['option_data']
+            if not option.get('error') and option.get('shares'):
+                try:
+                    total_option_grants += int(option['shares'])
+                except (ValueError, TypeError):
+                    pass
+
+    # Check if grants exceed pool
+    if option_pool_size and total_option_grants > option_pool_size:
+        issues.append({
+            'severity': 'critical',
+            'category': 'Option Pool Integrity',
+            'description': f"Total option grants ({total_option_grants:,} shares) exceed declared option pool size ({option_pool_size:,} shares). Pool must be increased before additional grants are valid."
+        })
+    elif option_pool_size and total_option_grants > 0:
+        utilization = (total_option_grants / option_pool_size) * 100
+        if utilization > 90:
+            issues.append({
+                'severity': 'warning',
+                'category': 'Option Pool Integrity',
+                'description': f"Option pool is {utilization:.1f}% utilized ({total_option_grants:,} of {option_pool_size:,} shares). Consider increasing pool size before next grant."
+            })
+
+    # MISSING DOCUMENT INFERENCE: Check board minutes for referenced documents
+    referenced_docs = []
+    for ext in extractions:
+        if 'minutes_data' in ext:
+            minutes = ext['minutes_data']
+            if not minutes.get('error'):
+                decisions = minutes.get('key_decisions', [])
+                for decision in decisions:
+                    decision_lower = str(decision).lower()
+                    # Look for references to documents that should exist
+                    if 'option grant' in decision_lower and 'approved' in decision_lower:
+                        referenced_docs.append(('Option Grant Agreement', decision))
+                    if 'stock issuance' in decision_lower or 'issue shares' in decision_lower:
+                        referenced_docs.append(('Stock Purchase Agreement', decision))
+                    if 'safe' in decision_lower and 'approved' in decision_lower:
+                        referenced_docs.append(('SAFE', decision))
+
+    # Check if referenced documents exist
+    for doc_type, decision in referenced_docs:
+        has_doc = any(doc_type in d.get('category', '') for d in documents)
+        if not has_doc:
+            issues.append({
+                'severity': 'warning',
+                'category': 'Missing Document',
+                'description': f"Board minutes reference '{decision[:80]}...' but no {doc_type} document found. Document may be missing from the upload."
+            })
 
     logger.info(f"Deterministic checks found {len(issues)} issues")
     return issues
@@ -1756,14 +1971,32 @@ def match_approvals_batch(transactions: List[Dict[str, Any]], classified_docs: L
             logger.warning("Some matches missing tx_index field - filtering out invalid entries")
             matches = [m for m in matches if 'tx_index' in m]
 
+        # Build set of valid approval doc IDs for validation
+        valid_approval_ids = {str(doc['document_id']) for doc in approval_docs if doc.get('document_id')}
+
         # Merge results back into transactions
         for match in matches:
             tx_idx = match.get('tx_index')
             if tx_idx is not None and 0 <= tx_idx < len(transactions):
-                transactions[tx_idx]['approval_doc_id'] = match.get('approval_doc_id')
-                transactions[tx_idx]['approval_snippet'] = match.get('approval_quote')
-                transactions[tx_idx]['compliance_status'] = match.get('compliance_status', 'VERIFIED')
-                transactions[tx_idx]['compliance_note'] = match.get('compliance_note')
+                returned_id = match.get('approval_doc_id')
+
+                if returned_id and str(returned_id) not in valid_approval_ids:
+                    logger.warning(
+                        f"Claude returned invalid approval_doc_id '{returned_id}' for tx_index {tx_idx} "
+                        f"(not in approval manifest of {len(valid_approval_ids)} docs). Setting to null."
+                    )
+                    transactions[tx_idx]['approval_doc_id'] = None
+                    transactions[tx_idx]['approval_snippet'] = None
+                    transactions[tx_idx]['compliance_status'] = 'WARNING'
+                    transactions[tx_idx]['compliance_note'] = (
+                        (match.get('compliance_note') or '') +
+                        ' [Auto-corrected: AI returned non-approval document reference]'
+                    ).strip()
+                else:
+                    transactions[tx_idx]['approval_doc_id'] = returned_id
+                    transactions[tx_idx]['approval_snippet'] = match.get('approval_quote')
+                    transactions[tx_idx]['compliance_status'] = match.get('compliance_status', 'VERIFIED')
+                    transactions[tx_idx]['compliance_note'] = match.get('compliance_note')
 
         logger.info(f"Batch approval matching complete: {len(matches)} matches processed")
         return transactions
@@ -1783,7 +2016,7 @@ def match_approvals_batch(transactions: List[Dict[str, Any]], classified_docs: L
 # MAIN ORCHESTRATOR
 # ============================================================================
 
-async def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
+def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
     """
     Main orchestrator for the 3-pass AI audit pipeline.
 

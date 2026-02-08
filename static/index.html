@@ -34,12 +34,12 @@
     <!-- UPLOAD SECTION -->
     <main id="main-content">
     <section id="upload-section">
-        <div id="upload-zone">
+        <div id="upload-zone" role="button" tabindex="0" aria-label="Upload zone. Drop your zip file here or click to browse.">
             <img src="/static/stripe.png" class="upload-icon" alt="">
             <p class="primary-text">Drop your .zip file here or click to browse.</p>
             <p class="secondary-text">Maximum file size: 50MB</p>
         </div>
-        <input type="file" id="file-input" accept=".zip" style="display: none;">
+        <input type="file" id="file-input" accept=".zip" aria-label="Select zip file to upload" style="display: none;">
     </section>
 
     <!-- PAST AUDITS SECTION -->
@@ -183,7 +183,7 @@
                     <div class="download-preview-content" id="minute-book-preview">
                         Loading preview...
                     </div>
-                    <button class="download-button" id="download-minute-book">
+                    <button class="download-button" id="download-minute-book" disabled>
                         DOWNLOAD MINUTE BOOK
                     </button>
                 </div>
@@ -196,7 +196,7 @@
                     <div class="download-preview-content" id="issues-preview">
                         Loading preview...
                     </div>
-                    <button class="download-button" id="download-issues">
+                    <button class="download-button" id="download-issues" disabled>
                         DOWNLOAD CRITICAL ISSUES
                     </button>
                 </div>
@@ -213,9 +213,6 @@
                 <img src="/static/tieout-logo.png" alt="Tieout" class="footer-logo">
             </div>
             <div class="footer-links">
-                <a href="/">Security</a>
-                <a href="/contact">Contact</a>
-                <a href="/privacy">Privacy</a>
             </div>
             <div class="footer-copyright">
                 Tieout v1.0 | Justin Graham

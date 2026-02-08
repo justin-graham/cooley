@@ -19,6 +19,70 @@ const resultsSection = document.getElementById('results');
 const uploadSection = document.getElementById('upload-section');
 
 // ============================================================================
+// DATA ROOM MAPPING
+// ============================================================================
+
+const DATA_ROOM_MAPPING = [
+    {
+        title: '1. Authority and Governance',
+        subitems: [
+            { label: 'Certificate of Incorporation (all versions)', categories: ['Charter Document'] },
+            { label: 'Board consents approving equity plans, grants, SAFEs, notes, and share increases', categories: ['Board/Shareholder Minutes'] },
+            { label: 'Stockholder consents approving equity plans, charter amendments, and financings', categories: [] }
+        ]
+    },
+    {
+        title: '2. Equity',
+        subitems: [
+            { label: 'Investors\u2019 Rights, Voting, and ROFR / Co-Sale Agreements', categories: [] },
+            { label: 'Equity Incentive Plan, amendments, and share reserve changes', categories: ['Equity Incentive Plan'] },
+            { label: 'Founder and investor stock purchase agreements', categories: ['Stock Purchase Agreement'] },
+            { label: 'Option, RSU, and warrant agreements', categories: ['Option Grant Agreement'] },
+            { label: 'SAFEs, convertible notes, and side letters', categories: ['SAFE', 'Convertible Note'] },
+            { label: 'Option exercise notices and payment records', categories: [] },
+            { label: 'Share repurchases, forfeitures, and cancellations', categories: ['Share Repurchase Agreement'] },
+            { label: 'Current and historical cap tables', categories: ['Financial Statement', 'Stock Certificate'] },
+            { label: 'Fully diluted calculations and waterfalls', categories: [] }
+        ]
+    },
+    {
+        title: '3. Employment and Advisors',
+        subitems: [
+            { label: 'Employee offer letters and employment agreements', categories: ['Employment Agreement'] },
+            { label: 'Contractor and advisor agreements', categories: [] },
+            { label: 'Equity grants tied to each individual', categories: [] },
+            { label: 'Vesting schedules and acceleration provisions', categories: [] }
+        ]
+    },
+    {
+        title: '4. Intellectual Property Ownership',
+        subitems: [
+            { label: 'Founder, employee, contractor, and advisor IP assignment agreements', categories: ['IP/Proprietary Info Agreement'] },
+            { label: 'Confidentiality agreements', categories: [] },
+            { label: 'Inbound IP licenses and open source disclosures', categories: [] },
+            { label: 'University or prior employer IP agreements', categories: [] },
+            { label: 'IP carve-outs and side letters', categories: [] }
+        ]
+    },
+    {
+        title: '5. Securities Law Compliance',
+        subitems: [
+            { label: 'Rule 701 disclosures and financials', categories: ['Corporate Records'] },
+            { label: 'Form D filings and investor questionnaires', categories: ['83(b) Election'] }
+        ]
+    },
+    {
+        title: '6. Exceptions and Risk Items',
+        subitems: [
+            { label: 'Missing approvals or undocumented issuances', categories: [] },
+            { label: 'Disputed ownership', categories: [] },
+            { label: 'Unassigned or encumbered IP', categories: [] },
+            { label: 'Non-standard equity or side arrangements', categories: ['Other', 'Indemnification Agreement'] }
+        ]
+    }
+];
+
+// ============================================================================
 // PROGRESS STEP MAPPING
 // ============================================================================
 
@@ -350,17 +414,24 @@ async function checkStatus() {
         // Handle error
         if (data.status === 'error') {
             clearInterval(pollInterval);
-            progressText.textContent = `Processing failed: ${data.error}`;
-            setTimeout(() => {
-                progressSection.style.display = 'none';
-                uploadSection.style.display = 'block';
-            }, 5000);
+            progressSection.innerHTML = `
+                <div role="alert" style="text-align: center; padding: 2rem;">
+                    <p style="font-family: var(--font-grotesk); font-size: var(--text-lg); margin-bottom: 0.5rem;">Processing failed</p>
+                    <p style="color: var(--gray-600); margin-bottom: 1.5rem;">${escapeHtml(data.error || 'An unexpected error occurred')}</p>
+                    <button class="btn btn-primary" onclick="showUploadPage()">Try Again</button>
+                </div>
+            `;
         }
 
     } catch (error) {
-        console.error('Status check error:', error);
         clearInterval(pollInterval);
-        progressText.textContent = 'Error checking status';
+        progressSection.innerHTML = `
+            <div role="alert" style="text-align: center; padding: 2rem;">
+                <p style="font-family: var(--font-grotesk); font-size: var(--text-lg); margin-bottom: 0.5rem;">Connection error</p>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">Unable to check processing status.</p>
+                <button class="btn btn-primary" onclick="showUploadPage()">Try Again</button>
+            </div>
+        `;
     }
 }
 
@@ -493,42 +564,6 @@ function renderCompanyHeader(results) {
 }
 
 /**
- * Render document inventory grouped by category with card grid
- */
-function renderDocuments(documents) {
-    const container = document.getElementById('documents-content');
-
-    // Group documents by category
-    const grouped = documents.reduce((acc, doc) => {
-        const category = doc.category || 'Other';
-        if (!acc[category]) acc[category] = [];
-        acc[category].push(doc);
-        return acc;
-    }, {});
-
-    // Render card grid (all collapsed by default)
-    let html = '<div class="documents-grid">';
-    for (const [category, docs] of Object.entries(grouped)) {
-        html += `
-            <div class="document-category collapsed">
-                <h3 onclick="toggleCategory(this)">${category} <span class="doc-count">(${docs.length})</span></h3>
-                <ul class="document-list">
-                    ${docs.map(doc => `
-                        <li>
-                            ${doc.filename}
-                            ${doc.error ? '<span class="error-badge">(Failed)</span>' : ''}
-                        </li>
-                    `).join('')}
-                </ul>
-            </div>
-        `;
-    }
-    html += '</div>';
-
-    container.innerHTML = html;
-}
-
-/**
  * Render document breakdown accordion (Martian-style)
  */
 function renderDocumentAccordion(documents, companyName, failedDocuments = [], complianceIssues = []) {
@@ -539,21 +574,6 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
     if (nameSpan && companyName) {
         nameSpan.textContent = companyName;
     }
-
-    // Group documents by classification/category
-    const typeGroups = documents.reduce((acc, doc) => {
-        const type = doc.category || doc.classification || 'Other';
-        if (!acc[type]) {
-            acc[type] = { count: 0, docs: [] };
-        }
-        acc[type].count++;
-        acc[type].docs.push(doc);
-        return acc;
-    }, {});
-
-    // Sort by count (descending)
-    const sortedTypes = Object.entries(typeGroups)
-        .sort((a, b) => b[1].count - a[1].count);
 
     const complianceItem = `
         <div class="accordion-item">
@@ -593,26 +613,10 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
         </div>
     `;
 
-    // Render accordion items
-    const docItems = sortedTypes.map(([type, data]) => `
-        <div class="accordion-item">
-            <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="handleAccordionKeydown(event)">
-                <h3 class="accordion-title">${type}</h3>
-                <span class="accordion-toggle" aria-hidden="true">+</span>
-            </div>
-            <div class="accordion-content" role="region" aria-hidden="true">
-                <div class="accordion-body">
-                    ${(data.docs || []).map(doc => {
-                        const docId = doc.document_id || doc.id || '';
-                        const name = doc.filename || 'Untitled';
-                        return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document" role="button" tabindex="0">${name}</div>`;
-                    }).join('')}
-                </div>
-            </div>
-        </div>
-    `).join('');
+    // Build Data Room accordion item (nested folder structure)
+    const dataRoomItem = buildDataRoomItem(documents);
 
-    const html = complianceItem + failedItem + docItems;
+    const html = complianceItem + failedItem + dataRoomItem;
 
     container.innerHTML = html || '<p style="text-align: center; color: var(--text-secondary);">No documents to display</p>';
 
@@ -666,142 +670,116 @@ function handleAccordionKeydown(event) {
 }
 
 /**
- * Render timeline of corporate events with vertical line and dots
+ * Toggle Data Room sub-folder open/closed (independent of top-level accordion)
  */
-function renderTimeline(timeline) {
-    const container = document.getElementById('timeline-content');
+function toggleDataRoomFolder(headerElement) {
+    const folder = headerElement.parentElement;
+    folder.classList.toggle('open');
+}
 
-    if (!timeline || timeline.length === 0) {
-        container.innerHTML = '<p class="monospace">No timeline events found.</p>';
-        return;
+/**
+ * Build the Data Room accordion item HTML from classified documents
+ */
+function buildDataRoomItem(documents) {
+    // Group docs by category for lookup
+    const docsByCategory = {};
+    documents.forEach(doc => {
+        const cat = doc.category || doc.classification || 'Other';
+        if (!docsByCategory[cat]) docsByCategory[cat] = [];
+        docsByCategory[cat].push(doc);
+    });
+
+    // Track which categories are placed into the Data Room
+    const placedCategories = new Set();
+
+    const foldersHtml = DATA_ROOM_MAPPING.map(folder => {
+        let folderDocCount = 0;
+
+        const subitemsHtml = folder.subitems.map(subitem => {
+            const docs = [];
+            subitem.categories.forEach(cat => {
+                placedCategories.add(cat);
+                if (docsByCategory[cat]) {
+                    docs.push(...docsByCategory[cat]);
+                }
+            });
+            folderDocCount += docs.length;
+
+            if (docs.length === 0) {
+                return `
+                    <div class="data-room-subitem">
+                        <div class="data-room-subitem-header">${subitem.label}</div>
+                        <div class="data-room-subitem-empty">No documents</div>
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="data-room-subitem">
+                    <div class="data-room-subitem-header">${subitem.label} (${docs.length})</div>
+                    <div class="data-room-subitem-docs">
+                        ${docs.map(doc => {
+                            const docId = doc.document_id || doc.id || '';
+                            const name = doc.filename || 'Untitled';
+                            return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document" role="button" tabindex="0">${name}</div>`;
+                        }).join('')}
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        return `
+            <div class="data-room-folder">
+                <div class="data-room-folder-header" onclick="toggleDataRoomFolder(this)" role="button" tabindex="0">
+                    <span class="data-room-folder-title">${folder.title}</span>
+                    <span class="data-room-folder-count">${folderDocCount} doc${folderDocCount !== 1 ? 's' : ''}</span>
+                    <span class="data-room-folder-toggle">+</span>
+                </div>
+                <div class="data-room-folder-content">
+                    ${subitemsHtml}
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    // Catch any unplaced documents and add them to Exceptions
+    const unplacedDocs = [];
+    Object.keys(docsByCategory).forEach(cat => {
+        if (!placedCategories.has(cat)) {
+            unplacedDocs.push(...docsByCategory[cat]);
+        }
+    });
+
+    let unplacedHtml = '';
+    if (unplacedDocs.length > 0) {
+        unplacedHtml = `
+            <div class="data-room-subitem">
+                <div class="data-room-subitem-header">Other documents (${unplacedDocs.length})</div>
+                <div class="data-room-subitem-docs">
+                    ${unplacedDocs.map(doc => {
+                        const docId = doc.document_id || doc.id || '';
+                        const name = doc.filename || 'Untitled';
+                        return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document" role="button" tabindex="0">${name}</div>`;
+                    }).join('')}
+                </div>
+            </div>
+        `;
     }
 
-    const html = timeline.map(event => `
-        <div class="timeline-event">
-            <div class="timeline-date">${event.date || 'Unknown'}</div>
-            <div class="timeline-dot"></div>
-            <div class="timeline-description">${event.description || 'No description'}</div>
+    return `
+        <div class="accordion-item">
+            <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="handleAccordionKeydown(event)">
+                <h3 class="accordion-title">Data Room</h3>
+                <span class="accordion-toggle" aria-hidden="true">+</span>
+            </div>
+            <div class="accordion-content" role="region" aria-hidden="true">
+                <div class="accordion-body data-room-body">
+                    ${foldersHtml}
+                    ${unplacedHtml}
+                </div>
+            </div>
         </div>
-    `).join('');
-
-    container.innerHTML = html;
-}
-
-/**
- * Render cap table with progress bars and verification indicators
- */
-function renderCapTable(capTable) {
-    const container = document.getElementById('cap-table-content');
-
-    if (!capTable || capTable.length === 0) {
-        container.innerHTML = '<p class="monospace">No equity issuances found in documents.</p>';
-        return;
-    }
-
-    // Calculate totals
-    const totalShares = capTable.reduce((sum, entry) => sum + (entry.shares || 0), 0);
-    const totalOwnership = capTable.reduce((sum, entry) => sum + (entry.ownership_pct || 0), 0);
-
-    const html = `
-        <table>
-            <thead>
-                <tr>
-                    <th>Shareholder</th>
-                    <th>Class</th>
-                    <th>Shares</th>
-                    <th>Ownership</th>
-                </tr>
-            </thead>
-            <tbody>
-                ${capTable.map(entry => {
-                    // Get verification badge if available
-                    const verificationBadge = getVerificationBadge(entry.verification);
-
-                    return `
-                        <tr>
-                            <td>${entry.shareholder || 'Unknown'}${verificationBadge}</td>
-                            <td>${entry.share_class || 'N/A'}</td>
-                            <td>${formatNumber(entry.shares)}</td>
-                            <td>
-                                <div class="ownership-cell">
-                                    <div class="ownership-bar">
-                                        <div class="ownership-fill" style="width: ${entry.ownership_pct || 0}%"></div>
-                                    </div>
-                                    <span class="ownership-text">${formatPercent(entry.ownership_pct)}</span>
-                                </div>
-                            </td>
-                        </tr>
-                    `;
-                }).join('')}
-                <tr class="total-row">
-                    <td colspan="2">TOTAL</td>
-                    <td>${formatNumber(totalShares)}</td>
-                    <td><span class="ownership-text">${formatPercent(totalOwnership)}</span></td>
-                </tr>
-            </tbody>
-        </table>
     `;
-
-    container.innerHTML = html;
-}
-
-/**
- * Get verification badge HTML based on confidence score
- */
-function getVerificationBadge(verification) {
-    if (!verification || !verification.confidence_score) {
-        return '';
-    }
-
-    const score = verification.confidence_score;
-    const badgeClass = score >= 70 ? 'verification-high' : 'verification-low';
-    const symbol = score >= 70 ? '✓' : '⚠';
-
-    return `<span class="verification-badge ${badgeClass}" title="Verification confidence: ${score}%">${symbol} ${score}%</span>`;
-}
-
-/**
- * Render issues and recommendations
- */
-function renderIssues(issues) {
-    const container = document.getElementById('issues-content');
-
-    if (!issues || issues.length === 0) {
-        container.innerHTML = '<p class="monospace" style="color: var(--text-secondary);">✓ No issues detected</p>';
-        return;
-    }
-
-    const html = issues.map(issue => `
-        <div class="issue ${issue.severity}">
-            <div class="issue-category">${issue.category || 'General Issue'}</div>
-            <div class="issue-description">${issue.description || 'No description'}</div>
-        </div>
-    `).join('');
-
-    container.innerHTML = html;
-}
-
-/**
- * Render failed documents section
- */
-function renderFailedDocuments(failedDocs) {
-    const section = document.getElementById('failed-section');
-    const container = document.getElementById('failed-docs-content');
-
-    section.style.display = 'block';
-
-    const html = `
-        <ul class="document-list">
-            ${failedDocs.map(doc => `
-                <li>
-                    ${doc.filename}
-                    <span class="error-badge">${doc.error || 'Unknown error'}</span>
-                </li>
-            `).join('')}
-        </ul>
-    `;
-
-    container.innerHTML = html;
 }
 
 // ============================================================================
@@ -844,7 +822,6 @@ const AuditViewState = {
     dateRange: { min: null, max: null },
     currentDate: null,  // Controlled by slider
     currentCapTable: null,
-    previousCapTable: null,  // For detecting changes
 
     // Tab view state
     currentView: 'issued',  // 'issued', 'fully-diluted', 'options'
@@ -1042,7 +1019,7 @@ function renderHorizontalTimeline() {
 /**
  * Select a timeline event and update all views
  */
-async function selectTimelineEvent(eventId) {
+function selectTimelineEvent(eventId) {
     const event = AuditViewState.allEvents.find(e => e.id === eventId);
     if (!event) return;
 
@@ -1070,8 +1047,8 @@ async function selectTimelineEvent(eventId) {
     });
     document.getElementById('timeline-date-display').textContent = `Viewing: ${dateStr}`;
 
-    // Re-render cap table and event stream
-    await renderCapTable();
+    // Re-render cap table (debounced) and event stream
+    debouncedRenderCapTable();
     renderEventStream();
 }
 
@@ -1435,6 +1412,7 @@ function renderEventStream() {
                     <img src="${event.preview_image}"
                          alt="Document preview"
                          class="event-preview-image"
+                         loading="lazy"
                          style="${previewStyle}" />
                 </div>
             ` : ''}
@@ -1538,6 +1516,9 @@ function debounce(func, wait) {
     };
 }
 
+// Debounced cap table render to avoid hammering API during rapid timeline clicks
+const debouncedRenderCapTable = debounce(() => renderCapTable(), 200);
+
 /**
  * Toggle Home link visibility in the nav
  */
@@ -1555,6 +1536,7 @@ function setHomeLinkVisibility(isVisible) {
  * Load and display past audits list
  */
 async function loadPastAudits() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     const container = document.getElementById('past-audits-accordion');
     const section = document.getElementById('past-audits-section');
 
@@ -1664,12 +1646,14 @@ async function loadAuditById(auditId) {
         }
 
     } catch (error) {
-        console.error('Error loading audit:', error);
-        progressText.textContent = `Error: ${error.message}`;
-        setTimeout(() => {
-            progressSection.style.display = 'none';
-            loadPastAudits(); // Return to past audits list
-        }, 3000);
+        progressSection.innerHTML = `
+            <div role="alert" style="text-align: center; padding: 2rem;">
+                <p style="font-family: var(--font-grotesk); font-size: var(--text-lg); margin-bottom: 0.5rem;">Failed to load audit</p>
+                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">${escapeHtml(error.message)}</p>
+                <button class="btn btn-secondary" onclick="loadPastAudits()" style="margin-right: 0.5rem;">Back to Audits</button>
+                <button class="btn btn-primary" onclick="loadAuditById('${auditId}')">Retry</button>
+            </div>
+        `;
     }
 }
 
@@ -1688,10 +1672,20 @@ function hideAllSections() {
  * Show upload page
  */
 function showUploadPage() {
+    if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     hideAllSections();
     uploadSection.style.display = 'block';
     document.getElementById('upload-header').style.display = 'block';
     setHomeLinkVisibility(false);
+
+    // Restore progress section HTML if it was replaced by error message
+    progressSection.innerHTML = `
+        <div class="loader-container">
+            <div class="loader"></div><div class="loader"></div><div class="loader"></div>
+        </div>
+        <p id="progress-step" class="progress-step">Processing</p>
+        <p id="progress-text" class="progress-text" aria-live="polite" aria-busy="true">Starting...</p>
+    `;
 }
 
 // Event listeners
@@ -1732,10 +1726,12 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        // Arrow keys: Navigate timeline
+        // Arrow keys: Navigate timeline (only when timeline is visible)
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-            if (AuditViewState.allEvents && AuditViewState.allEvents.length > 0) {
-                e.preventDefault(); // Prevent page scroll
+            const timelineEl = document.querySelector('.horizontal-timeline');
+            const isTimelineVisible = timelineEl && timelineEl.offsetParent !== null;
+            if (isTimelineVisible && AuditViewState.allEvents && AuditViewState.allEvents.length > 0) {
+                e.preventDefault();
                 const currentIndex = AuditViewState.allEvents.findIndex(
                     evt => new Date(evt.event_date).getTime() === AuditViewState.currentDate
                 );
@@ -1878,7 +1874,7 @@ async function showDocumentModal(auditId, docId, snippetToHighlight = null, prev
         modalFilename.textContent = doc.filename || 'Document';
         modalClassification.textContent = doc.classification || 'Unknown Document Type';
 
-        // If we have a preview image, show that instead of raw text for a more realistic doc view
+        // If we have a preview image, show that instead of raw text
         if (previewImage) {
             modalContent.innerHTML = `
                 <img src="${previewImage}" alt="Document preview"
@@ -1887,15 +1883,13 @@ async function showDocumentModal(auditId, docId, snippetToHighlight = null, prev
         } else {
             let fullText = doc.full_text || 'No text content available';
 
-            // Highlight snippet if provided
+            // Highlight snippet if provided — escape first, then insert mark tags
             if (snippetToHighlight && fullText.includes(snippetToHighlight)) {
-                fullText = fullText.replace(
-                    snippetToHighlight,
-                    `<mark>${escapeHtml(snippetToHighlight)}</mark>`
-                );
-                modalContent.innerHTML = escapeHtml(fullText).replace(
-                    `&lt;mark&gt;${escapeHtml(snippetToHighlight)}&lt;/mark&gt;`,
-                    `<mark>${escapeHtml(snippetToHighlight)}</mark>`
+                const escapedText = escapeHtml(fullText);
+                const escapedSnippet = escapeHtml(snippetToHighlight);
+                modalContent.innerHTML = escapedText.replace(
+                    escapedSnippet,
+                    `<mark>${escapedSnippet}</mark>`
                 );
 
                 // Scroll to highlighted snippet after a brief delay
@@ -1909,6 +1903,10 @@ async function showDocumentModal(auditId, docId, snippetToHighlight = null, prev
                 modalContent.textContent = fullText;
             }
         }
+
+        // Lock body scroll and trap focus
+        document.body.style.overflow = 'hidden';
+        _trapFocusInModal(modal);
 
     } catch (error) {
         console.error('Error loading document:', error);
@@ -1926,6 +1924,39 @@ async function showDocumentModal(auditId, docId, snippetToHighlight = null, prev
 function hideDocumentModal() {
     const modal = document.getElementById('document-modal');
     modal.style.display = 'none';
+    document.body.style.overflow = '';
+    _removeFocusTrap();
+}
+
+// Focus trap state
+let _focusTrapHandler = null;
+
+function _trapFocusInModal(modal) {
+    _removeFocusTrap();
+    const focusableSelector = 'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])';
+    _focusTrapHandler = function(e) {
+        if (e.key !== 'Tab') return;
+        const focusable = modal.querySelectorAll(focusableSelector);
+        if (focusable.length === 0) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (e.shiftKey) {
+            if (document.activeElement === first) { e.preventDefault(); last.focus(); }
+        } else {
+            if (document.activeElement === last) { e.preventDefault(); first.focus(); }
+        }
+    };
+    document.addEventListener('keydown', _focusTrapHandler);
+    // Focus the close button
+    const closeBtn = modal.querySelector('.modal-close');
+    if (closeBtn) closeBtn.focus();
+}
+
+function _removeFocusTrap() {
+    if (_focusTrapHandler) {
+        document.removeEventListener('keydown', _focusTrapHandler);
+        _focusTrapHandler = null;
+    }
 }
 
 /**
@@ -1951,207 +1982,6 @@ function toggleSection(sectionId) {
 }
 
 /**
- * Initialize company header canvas animation
- */
-function initCompanyHeaderAnimation() {
-    const canvas = document.getElementById("fig84Canvas");
-    const wrap = document.getElementById("companyHeaderCanvas");
-
-    if (!canvas || !wrap) return;
-
-    const ctx = canvas.getContext("2d");
-
-    function resizeCanvas() {
-        const rect = wrap.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = rect.width * dpr;
-        canvas.height = rect.height * dpr;
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    }
-
-    function drawRect(cx, cy, w, h, angle) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.rotate(angle);
-        ctx.strokeRect(-w / 2, -h / 2, w, h);
-        ctx.restore();
-    }
-
-    function draw(time) {
-        const t = time * 0.001;
-
-        const { width, height } = canvas.getBoundingClientRect();
-        ctx.clearRect(0, 0, width, height);
-
-        ctx.lineWidth = 1;
-        ctx.strokeStyle = "#4b5563";
-
-        const baseX = width * 0.1;
-        const baseY = height * 1.05;
-        const apexX = width * 0.5;
-        const apexY = height * 0.55;
-
-        // Mountain fan of large rectangles
-        const bigCount = 26;
-        for (let i = 0; i < bigCount; i++) {
-            const alpha = i / (bigCount - 1);
-            const cx = baseX + (apexX - baseX) * alpha;
-            const cy = baseY + (apexY - baseY) * alpha;
-
-            const baseSize = 170;
-            const size = baseSize * (0.55 + alpha * 0.9);
-            const wobble = Math.sin(t * 0.6 + i * 0.4) * 0.15;
-            const tilt = -0.9 + alpha * 1.4 + wobble;
-
-            drawRect(cx, cy, size, size, tilt);
-        }
-
-        // Mid-chain of medium rectangles
-        const midCount = 22;
-        for (let i = 0; i < midCount; i++) {
-            const alpha = i / (midCount - 1);
-            const cx = apexX + Math.sin(alpha * 3.0 + t * 0.7) * 10;
-            const cy = apexY - alpha * height * 0.22;
-
-            const size = 60 * (1 - alpha * 0.45);
-            const tilt = 0.1 * Math.sin(t * 1.3 + alpha * 5.0);
-
-            drawRect(cx, cy, size, size, tilt);
-        }
-
-        // Top stack of small rectangles
-        const topCount = 8;
-        const headBaseX = apexX;
-        const headBaseY = apexY - height * 0.24;
-        for (let i = 0; i < topCount; i++) {
-            const alpha = i / (topCount - 1);
-            const cx = headBaseX + Math.sin(t * 0.7 + alpha * 2.4) * 12;
-            const cy = headBaseY - alpha * 40;
-
-            const size = 30 + alpha * 40;
-            const tilt = 0.25 * Math.sin(t * 1.1 + alpha * 3.0);
-
-            drawRect(cx, cy, size * 1.6, size, tilt);
-        }
-
-        requestAnimationFrame(draw);
-    }
-
-    window.addEventListener("resize", resizeCanvas);
-
-    // Initial setup
-    resizeCanvas();
-    requestAnimationFrame(draw);
-}
-
-/**
- * Initialize hero canvas animation (Martian Grid version)
- * Commented out - replaced with video element
- */
-// function initHeroCanvas() {
-//     const canvas = document.getElementById("hero-canvas");
-//     if (!canvas) return;
-
-//     const ctx = canvas.getContext("2d");
-//     const wrap = canvas.parentElement;
-//     const COLORS = ["#000000", "#D62828", "#F37022", "#0ABAB5"];
-
-//     function resizeCanvas() {
-//         const rect = wrap.getBoundingClientRect();
-//         const dpr = window.devicePixelRatio || 1;
-//         canvas.width = rect.width * dpr;
-//         canvas.height = rect.height * dpr;
-//         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-//     }
-
-//     function drawRect(cx, cy, w, h, angle) {
-//         ctx.save();
-//         ctx.translate(cx, cy);
-//         ctx.rotate(angle);
-//         ctx.strokeRect(-w / 2, -h / 2, w, h);
-//         ctx.restore();
-//     }
-
-//     function draw(time) {
-//         const t = time * 0.001;
-
-//         const { width, height } = canvas.getBoundingClientRect();
-//         ctx.clearRect(0, 0, width, height);
-
-//         ctx.lineWidth = 1;
-
-//         const baseX = width * 0.1;
-//         const baseY = height * 1.05;
-//         const apexX = width * 0.5;
-//         const apexY = height * 0.55;
-
-//         // Mountain fan of large rectangles (with jitter and color)
-//         const bigCount = 26;
-//         for (let i = 0; i < bigCount; i++) {
-//             const alpha = i / (bigCount - 1);
-//             const jitter = (i * 13.37) % 1;
-//             const offset = (jitter - 0.5) * 6;
-//             const cx = baseX + (apexX - baseX) * alpha + offset;
-//             const cy = baseY + (apexY - baseY) * alpha;
-
-//             const baseSize = 170;
-//             const size = baseSize * (0.55 + alpha * 0.9);
-//             const wobble = Math.sin(t * 0.6 + i * 0.4) * 0.15;
-//             const tilt = -0.9 + alpha * 1.4 + wobble;
-
-//             ctx.save();
-//             ctx.globalAlpha = 0.22;
-//             ctx.strokeStyle = COLORS[i % COLORS.length];
-//             drawRect(cx, cy, size, size, tilt);
-//             ctx.restore();
-//         }
-
-//         // Mid-chain of medium rectangles
-//         const midCount = 22;
-//         for (let i = 0; i < midCount; i++) {
-//             const alpha = i / (midCount - 1);
-//             const cx = apexX + Math.sin(alpha * 3.0 + t * 0.7) * 10;
-//             const cy = apexY - alpha * height * 0.22;
-
-//             const size = 60 * (1 - alpha * 0.45);
-//             const tilt = 0.1 * Math.sin(t * 1.3 + alpha * 5.0);
-
-//             ctx.save();
-//             ctx.globalAlpha = 0.4;
-//             ctx.strokeStyle = COLORS[i % COLORS.length];
-//             drawRect(cx, cy, size, size, tilt);
-//             ctx.restore();
-//         }
-
-//         // Top stack of small rectangles
-//         const topCount = 8;
-//         const headBaseX = apexX;
-//         const headBaseY = apexY - height * 0.24;
-//         for (let i = 0; i < topCount; i++) {
-//             const alpha = i / (topCount - 1);
-//             const cx = headBaseX + Math.sin(t * 0.7 + alpha * 2.4) * 12;
-//             const cy = headBaseY - alpha * 40;
-
-//             const size = 30 + alpha * 40;
-//             const tilt = 0.25 * Math.sin(t * 1.1 + alpha * 3.0);
-
-//             ctx.save();
-//             ctx.globalAlpha = 0.5;
-//             ctx.strokeStyle = COLORS[i % COLORS.length];
-//             drawRect(cx, cy, size * 1.6, size, tilt);
-//             ctx.restore();
-//         }
-
-//         requestAnimationFrame(draw);
-//     }
-
-//     window.addEventListener("resize", resizeCanvas);
-
-//     // Initial setup
-//     resizeCanvas();
-//     requestAnimationFrame(draw);
-
-/**
  * Load download previews and wire up download buttons
  * @param {string} auditId - UUID of the audit
  */
@@ -2173,12 +2003,13 @@ async function loadDownloadPreviews(auditId) {
             issuesPreview.textContent = issuesData.preview || 'Preview unavailable';
         }
 
-        // Attach download handlers
+        // Attach download handlers and enable buttons
         const downloadMinuteBookBtn = document.getElementById('download-minute-book');
         if (downloadMinuteBookBtn) {
             downloadMinuteBookBtn.onclick = () => {
                 window.location.href = `/api/audits/${auditId}/download/minute-book`;
             };
+            downloadMinuteBookBtn.disabled = false;
         }
 
         const downloadIssuesBtn = document.getElementById('download-issues');
@@ -2186,6 +2017,7 @@ async function loadDownloadPreviews(auditId) {
             downloadIssuesBtn.onclick = () => {
                 window.location.href = `/api/audits/${auditId}/download/issues`;
             };
+            downloadIssuesBtn.disabled = false;
         }
 
     } catch (error) {
@@ -2291,8 +2123,16 @@ function initHeroScrollMotion() {
     };
 
     if (!heroMotionHandler) {
+        let heroInView = false;
+
+        // Only run scroll animation when hero is visible
+        const observer = new IntersectionObserver((entries) => {
+            heroInView = entries[0].isIntersecting;
+        }, { threshold: 0 });
+        observer.observe(heroSection);
+
         heroMotionHandler = () => {
-            if (heroMotionUpdate) heroMotionUpdate();
+            if (heroInView && heroMotionUpdate) heroMotionUpdate();
         };
 
         window.addEventListener('scroll', heroMotionHandler, { passive: true });
@@ -2302,5 +2142,4 @@ function initHeroScrollMotion() {
     heroMotionHandler();
 }
 
-// Initialize hero motion on page load
-document.addEventListener('DOMContentLoaded', initHeroScrollMotion);
+// Hero motion is initialized in renderResults() when results are displayed

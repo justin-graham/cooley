@@ -216,7 +216,7 @@ Respond ONLY with valid JSON matching this schema:"""
 
 BOARD_MINUTES_EXTRACTION_PROMPT = """You are analyzing Board or Shareholder Minutes/Consents.
 
-DOCUMENT TEXT:
+DOCUMENT TEXT (with paragraph markers [¶N]):
 ---
 {text}
 ---
@@ -225,9 +225,11 @@ Extract:
 - meeting_date: Date of the meeting or consent (YYYY-MM-DD format)
 - meeting_type: "Board Meeting", "Shareholder Meeting", or "Written Consent"
 - key_decisions: List of key decisions made (array of strings, max 3-5 items)
+- source_quote: Exact verbatim text from document showing the meeting date and key resolutions (for verification)
+- paragraph_number: The paragraph number [¶N] where the key decisions are mentioned (integer)
 
 Respond ONLY with valid JSON:
-{{"meeting_date": "...", "meeting_type": "...", "key_decisions": []}}"""
+{{"meeting_date": "...", "meeting_type": "...", "key_decisions": [], "source_quote": "...", "paragraph_number": 0}}"""
 
 
 OPTION_GRANT_EXTRACTION_PROMPT = """You are analyzing an Option Grant Agreement or RSU Agreement.
@@ -312,25 +314,6 @@ For each event, provide:
 
 Respond ONLY with valid JSON (array of events sorted by date):
 [{{"date": "...", "event_type": "...", "description": "...", "source_docs": []}}]"""
-
-
-CAP_TABLE_SYNTHESIS_PROMPT = """You are building a capitalization table from equity issuance data.
-
-EXTRACTED EQUITY DATA:
----
-{equity_data_json}
----
-
-Aggregate all equity issuances by shareholder and share class. Calculate:
-- Total shares per shareholder per class
-- Ownership percentage (shares / total outstanding shares * 100)
-
-For SAFEs and convertible notes, list them separately as "SAFE" or "Convertible Note" in the share_class field.
-
-Respond ONLY with valid JSON (array of cap table entries):
-[{{"shareholder": "...", "shares": 0, "share_class": "...", "ownership_pct": 0.0}}]
-
-Sort by ownership percentage descending."""
 
 
 ISSUE_TRACKER_PROMPT = """You are a corporate attorney auditing governance records for a startup. Identify concrete issues and missing documents.

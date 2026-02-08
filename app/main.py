@@ -16,12 +16,12 @@ from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 from collections import defaultdict
-from functools import lru_cache
+from functools import lru_cache  # kept for potential future use
 from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException, Query, Depends, Request, Response, Form
-from fastapi.responses import FileResponse
+from io import BytesIO
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
@@ -401,9 +401,9 @@ async def get_equity_events(audit_id: str, user_id: str = Depends(auth.get_curre
         HTTPException: 401 if not authenticated, 404 if audit not found
     """
     try:
-        # Check if audit exists
+        # Check if audit exists and belongs to user
         audit = db.get_audit(audit_id)
-        if not audit:
+        if not audit or str(audit.get('user_id', '')) != user_id:
             raise HTTPException(status_code=404, detail="Audit not found")
 
         # Fetch equity events
@@ -447,9 +447,9 @@ async def get_cap_table_at_time(
         HTTPException: 401 if not authenticated, 404 if audit not found
     """
     try:
-        # Check if audit exists
+        # Check if audit exists and belongs to user
         audit = db.get_audit(audit_id)
-        if not audit:
+        if not audit or str(audit.get('user_id', '')) != user_id:
             raise HTTPException(status_code=404, detail="Audit not found")
 
         # Parse date filter
@@ -462,7 +462,7 @@ async def get_cap_table_at_time(
             cutoff_date = date.today()
 
         # Get cached events (or fetch from DB)
-        events = _get_cached_equity_events(audit_id)
+        events = _get_equity_events(audit_id)
 
         if not events:
             # No events found - return empty cap table
@@ -578,11 +578,9 @@ async def get_option_pool(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@lru_cache(maxsize=128)
-def _get_cached_equity_events(audit_id: str) -> List[Dict[str, Any]]:
+def _get_equity_events(audit_id: str) -> List[Dict[str, Any]]:
     """
-    Cache equity events in memory to avoid repeated DB queries.
-    LRU cache automatically evicts old entries when full.
+    Fetch equity events from database.
 
     Args:
         audit_id: UUID of the audit
@@ -611,6 +609,11 @@ async def get_document(audit_id: str, doc_id: str, user_id: str = Depends(auth.g
         HTTPException: 401 if not authenticated, 404 if document not found
     """
     try:
+        # Verify audit belongs to user
+        audit = db.get_audit(audit_id)
+        if not audit or str(audit.get('user_id', '')) != user_id:
+            raise HTTPException(status_code=404, detail="Document not found")
+
         # Fetch document
         document = db.get_document_by_id(doc_id)
 
@@ -619,7 +622,7 @@ async def get_document(audit_id: str, doc_id: str, user_id: str = Depends(auth.g
 
         # Verify document belongs to this audit
         if str(document['audit_id']) != audit_id:
-            raise HTTPException(status_code=403, detail="Document does not belong to this audit")
+            raise HTTPException(status_code=404, detail="Document not found")
 
         # Convert UUID to string for JSON serialization
         document['id'] = str(document['id'])
@@ -667,19 +670,14 @@ async def download_minute_book(audit_id: str, user_id: str = Depends(auth.get_cu
         # Generate Word document
         docx_bytes = docgen.generate_minute_book(audit_id)
 
-        # Create temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
-        temp_file.write(docx_bytes)
-        temp_file.close()
-
-        # Filename
+        # Stream directly from memory
         company_name = audit.get('company_name', 'Company').replace(' ', '_')
         filename = f"{company_name}_Minute_Book_Index.docx"
 
-        return FileResponse(
-            temp_file.name,
+        return StreamingResponse(
+            BytesIO(docx_bytes),
             media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            filename=filename
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
 
     except HTTPException:
@@ -719,19 +717,14 @@ async def download_issues_report(audit_id: str, user_id: str = Depends(auth.get_
         # Generate Word document
         docx_bytes = docgen.generate_issues_report(audit_id)
 
-        # Create temporary file
-        temp_file = tempfile.NamedTemporaryFile(delete=False, suffix='.docx')
-        temp_file.write(docx_bytes)
-        temp_file.close()
-
-        # Filename
+        # Stream directly from memory
         company_name = audit.get('company_name', 'Company').replace(' ', '_')
         filename = f"{company_name}_Critical_Issues_Report.docx"
 
-        return FileResponse(
-            temp_file.name,
+        return StreamingResponse(
+            BytesIO(docx_bytes),
             media_type='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            filename=filename
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
         )
 
     except HTTPException:
@@ -739,6 +732,64 @@ async def download_issues_report(audit_id: str, user_id: str = Depends(auth.get_
     except Exception as e:
         logger.error(f"Failed to generate issues report: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to generate issues report: {str(e)}")
+
+
+@app.get("/api/audits/{audit_id}/download/minute-document")
+async def download_minute_document_pdf(audit_id: str, user_id: str = Depends(auth.get_current_user)):
+    """
+    Download comprehensive Minute Document as PDF.
+    Includes cap table, equity events with tieouts, issues, and document index.
+
+    Args:
+        audit_id: UUID of the audit
+        user_id: Authenticated user ID
+
+    Returns:
+        FileResponse with .pdf file
+
+    Raises:
+        HTTPException: 403 if access denied, 500 if generation fails
+    """
+    from app import minute_document
+    import tempfile
+
+    try:
+        # Verify audit belongs to user
+        audit = db.get_audit(audit_id)
+        if not audit:
+            raise HTTPException(status_code=404, detail="Audit not found")
+
+        if str(audit.get('user_id')) != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
+
+        # Get equity events
+        equity_events = db.get_equity_events_by_audit(audit_id)
+
+        # Get documents
+        documents = db.get_documents_by_audit(audit_id)
+
+        # Generate PDF
+        pdf_bytes = minute_document.generate_minute_document(
+            audit_data=audit,
+            equity_events=equity_events,
+            documents=documents
+        )
+
+        # Stream directly from memory
+        company_name = audit.get('company_name', 'Company').replace(' ', '_')
+        filename = f"{company_name}_Audit_Summary.pdf"
+
+        return StreamingResponse(
+            BytesIO(pdf_bytes),
+            media_type='application/pdf',
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate minute document PDF: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to generate minute document: {str(e)}")
 
 
 @app.get("/api/audits/{audit_id}/preview/minute-book")
@@ -824,13 +875,12 @@ async def preview_issues_report(audit_id: str, user_id: str = Depends(auth.get_c
 def process_documents_task(audit_id: str, zip_path: str):
     """
     Background task to process uploaded documents.
-    Changed to sync to avoid blocking FastAPI event loop with sync DB/file operations.
+    Sync function to avoid blocking FastAPI event loop with sync DB/file operations.
 
     Args:
         audit_id: UUID of the audit
         zip_path: Path to the uploaded zip file
     """
-    import asyncio
     extract_dir = None
     temp_dir = None
     logger = logging.getLogger(__name__)
@@ -843,138 +893,129 @@ def process_documents_task(audit_id: str, zip_path: str):
             db.update_progress(audit_id, "Extracting files from archive...")
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
-            print(f"ERROR: Failed to update progress for {audit_id}: {e}")
 
-        # Unzip files
-        file_paths = utils.unzip_file(zip_path)
-        extract_dir = os.path.dirname(file_paths[0]) if file_paths else None
+        # Use robust unzip with pre-validation, extension filtering, and error tracking
+        extracted_files, skipped_files = utils.unzip_file_robust(zip_path)
+        extract_dir = os.path.dirname(extracted_files[0]['path']) if extracted_files else None
 
         # Temp directory for PDF conversions (preview generation)
         temp_dir = tempfile.mkdtemp(prefix=f"audit_{audit_id}_")
 
-        if not file_paths:
-            raise ValueError("No files found in the archive")
+        if not extracted_files:
+            raise ValueError("No supported documents found in the archive")
 
-        logger.info(f"Extracted {len(file_paths)} files for audit {audit_id}")
+        # Log skipped files for transparency
+        if skipped_files:
+            logger.info(f"Skipped {len(skipped_files)} files: {[s['original_name'] for s in skipped_files]}")
+
+        logger.info(f"Extracted {len(extracted_files)} supported files for audit {audit_id}")
 
         try:
-            db.update_progress(audit_id, f"Found {len(file_paths)} files. Parsing documents...")
+            db.update_progress(audit_id, f"Found {len(extracted_files)} documents. Parsing...")
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
-            print(f"ERROR: Failed to update progress: {e}")
 
-        # Parse each document
+        # Parse each document with a single shared executor for timeout enforcement
         documents = []
-        for i, file_path in enumerate(file_paths, start=1):
-            filename = os.path.basename(file_path)
+        executor = ThreadPoolExecutor(max_workers=1)
+        try:
+            for i, file_info in enumerate(extracted_files, start=1):
+                file_path = file_info['path']
+                filename = file_info['original_name']
 
-            # Update progress every 5 docs, on first, and on last for better UX
-            if i % 5 == 1 or i == 1 or i == len(file_paths):
-                try:
-                    # Truncate filename to 40 chars for clean display
-                    display_name = filename[:40] + "..." if len(filename) > 40 else filename
-                    db.update_progress(audit_id, f"Parsing document {i}/{len(file_paths)}: {display_name}")
-                except Exception as e:
-                    logger.error(f"Failed to update progress: {e}")
-
-            # Generate document ID for tracking
-            doc_id = str(uuid.uuid4())
-
-            # Parse with timeout to prevent hanging
-            logger.info(f"Parsing document {i}/{len(file_paths)}: {filename}")
-
-            # Determine file type and convert to PDF if needed for preview generation
-            file_ext = os.path.splitext(filename)[1].lower()
-            pdf_path = None
-            text_spans = None
-
-            try:
-                # Convert DOCX/XLSX/PPTX to PDF for universal preview support
-                if file_ext in ['.docx', '.xlsx', '.pptx']:
-                    logger.info(f"Converting {filename} to PDF for preview generation")
-                    pdf_path = utils.convert_to_pdf(file_path, temp_dir)
-                    logger.info(f"Converted {filename} to PDF: {pdf_path}")
-                elif file_ext == '.pdf':
-                    pdf_path = file_path
-
-                # Extract bbox data for PDF files (for inline previews)
-                if pdf_path:
-                    logger.info(f"Extracting bbox data from {filename}")
-                    bbox_result = utils.parse_pdf_with_bboxes(pdf_path)
-                    text_spans = bbox_result['text_spans']
-                    logger.info(f"Extracted {len(text_spans)} text spans from {filename}")
-
-            except Exception as e:
-                logger.warning(f"Failed to convert/extract bbox for {filename}: {e}")
-                # Continue with regular parsing even if PDF conversion/bbox extraction fails
-
-            # Regular document parsing (for AI text extraction)
-            executor = ThreadPoolExecutor(max_workers=1)
-            future = executor.submit(utils.parse_document, file_path)
-            try:
-                doc = future.result(timeout=20)  # 20 second timeout per document
-                logger.info(f"Successfully parsed: {filename}")
-            except TimeoutError:
-                logger.error(f"Timeout parsing {filename} after 20 seconds")
-
-                # Try fallback extraction for PDFs
-                if file_ext == '.pdf':
-                    logger.info(f"Attempting fallback extraction for {filename}")
+                # Update progress every 5 docs, on first, and on last
+                if i % 5 == 1 or i == 1 or i == len(extracted_files):
                     try:
-                        text = utils.extract_from_pdf_fallback(file_path)
+                        display_name = filename[:40] + "..." if len(filename) > 40 else filename
+                        db.update_progress(audit_id, f"Parsing document {i}/{len(extracted_files)}: {display_name}")
+                    except Exception as e:
+                        logger.error(f"Failed to update progress: {e}")
+
+                doc_id = str(uuid.uuid4())
+                logger.info(f"Parsing document {i}/{len(extracted_files)}: {filename}")
+
+                # Determine file type and convert to PDF if needed for preview generation
+                file_ext = os.path.splitext(filename)[1].lower()
+                pdf_path = None
+                text_spans = None
+
+                try:
+                    if file_ext in ['.docx', '.xlsx', '.pptx']:
+                        logger.info(f"Converting {filename} to PDF for preview generation")
+                        pdf_path = utils.convert_to_pdf(file_path, temp_dir)
+                        logger.info(f"Converted {filename} to PDF: {pdf_path}")
+                    elif file_ext == '.pdf':
+                        pdf_path = file_path
+
+                    if pdf_path:
+                        logger.info(f"Extracting bbox data from {filename}")
+                        bbox_result = utils.parse_pdf_with_bboxes(pdf_path)
+                        text_spans = bbox_result['text_spans']
+                        logger.info(f"Extracted {len(text_spans)} text spans from {filename}")
+                except Exception as e:
+                    logger.warning(f"Failed to convert/extract bbox for {filename}: {e}")
+
+                # Parse document with timeout
+                future = executor.submit(utils.parse_document, file_path)
+                try:
+                    doc = future.result(timeout=20)
+                    logger.info(f"Successfully parsed: {filename}")
+                except TimeoutError:
+                    logger.error(f"Timeout parsing {filename} after 20 seconds")
+                    if file_ext == '.pdf':
+                        logger.info(f"Attempting fallback extraction for {filename}")
+                        try:
+                            text = utils.extract_from_pdf_fallback(file_path)
+                            doc = {
+                                'filename': filename,
+                                'type': 'pdf',
+                                'text': text,
+                                'summary': 'Parsed with fast fallback method (markdown structure not preserved)'
+                            }
+                            logger.info(f"Fallback extraction succeeded for {filename}")
+                        except Exception as fallback_error:
+                            logger.error(f"Fallback extraction also failed for {filename}: {fallback_error}")
+                            doc = {
+                                'filename': filename,
+                                'type': 'pdf',
+                                'text': '',
+                                'error': f'Timeout after 20s, fallback also failed: {str(fallback_error)}'
+                            }
+                    else:
                         doc = {
                             'filename': filename,
-                            'type': 'pdf',
-                            'text': text,
-                            'summary': 'Parsed with fast fallback method (markdown structure not preserved)'
-                        }
-                        logger.info(f"Fallback extraction succeeded for {filename}")
-                    except Exception as fallback_error:
-                        logger.error(f"Fallback extraction also failed for {filename}: {fallback_error}")
-                        doc = {
-                            'filename': filename,
-                            'type': 'pdf',
+                            'type': file_ext.lstrip('.'),
                             'text': '',
-                            'error': f'Timeout after 20s, fallback also failed: {str(fallback_error)}'
+                            'error': 'Document parsing timed out after 20 seconds'
                         }
-                else:
+                except Exception as e:
+                    logger.error(f"Error parsing {filename}: {e}")
                     doc = {
                         'filename': filename,
-                        'type': file_ext.lstrip('.'),
+                        'type': os.path.splitext(filename)[1].lstrip('.'),
                         'text': '',
-                        'error': 'Document parsing timed out after 20 seconds'
+                        'error': f'Parsing failed: {str(e)}'
                     }
-            except Exception as e:
-                logger.error(f"Error parsing {filename}: {e}")
-                doc = {
-                    'filename': filename,
-                    'type': os.path.splitext(filename)[1].lstrip('.'),
-                    'text': '',
-                    'error': f'Parsing failed: {str(e)}'
-                }
-            finally:
-                # Force garbage collection to clean up PyMuPDF references
-                import gc
-                gc.collect()
-                # Don't wait for stuck threads to finish
-                executor.shutdown(wait=False, cancel_futures=True)
 
-            # Add doc_id, pdf_path, and text_spans to document dict
-            doc['id'] = doc_id
-            if pdf_path:
-                doc['pdf_path'] = pdf_path
-            if text_spans:
-                doc['text_spans'] = text_spans
+                # Use the original filename from the zip
+                doc['filename'] = filename
+                doc['id'] = doc_id
+                if pdf_path:
+                    doc['pdf_path'] = pdf_path
+                if text_spans:
+                    doc['text_spans'] = text_spans
 
-            documents.append(doc)
+                documents.append(doc)
+        finally:
+            executor.shutdown(wait=False, cancel_futures=True)
 
         if not documents:
             raise ValueError("No parseable documents found")
 
         logger.info(f"Parsed {len(documents)} documents for audit {audit_id}")
 
-        # Run AI processing pipeline (async function called from sync context)
-        asyncio.run(processing.process_audit(audit_id, documents))
+        # Run AI processing pipeline
+        processing.process_audit(audit_id, documents)
 
         logger.info(f"Successfully completed audit {audit_id}")
 
