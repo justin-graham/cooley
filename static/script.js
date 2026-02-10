@@ -1737,7 +1737,7 @@ function showUploadPage() {
     selectedCaptableFile = null;
     if (captableUploadZone) {
         captableUploadZone.classList.remove('file-selected');
-        captableUploadZone.querySelector('.primary-text').textContent = 'Drop your cap table here';
+        captableUploadZone.querySelector('.primary-text').textContent = 'Drop your .xlsx file here or click to browse.';
         captableUploadZone.querySelector('.secondary-text').textContent = 'Optional. Carta export (.xlsx)';
     }
 }

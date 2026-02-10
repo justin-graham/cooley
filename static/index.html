@@ -36,9 +36,9 @@
     <section id="upload-section" class="martian-grid">
         <!-- Left: Carta cap table (optional) -->
         <div class="upload-column martian-column-left">
-            <div id="captable-upload-zone" role="button" tabindex="0" aria-label="Drop your Carta cap table here or click to browse. Optional.">
-                <img src="/static/stripe2.png" class="upload-icon" alt="">
-                <p class="primary-text">Drop your cap table here</p>
+            <div id="captable-upload-zone" class="upload-dropzone" role="button" tabindex="0" aria-label="Drop your Carta cap table here or click to browse. Optional.">
+                <img src="/static/stripe.png" class="upload-icon" alt="">
+                <p class="primary-text">Drop your .xlsx file here or click to browse.</p>
                 <p class="secondary-text">Optional. Carta export (.xlsx)</p>
             </div>
             <input type="file" id="captable-file-input" accept=".xlsx" aria-label="Select Carta cap table file" style="display: none;">
@@ -46,7 +46,7 @@
 
         <!-- Right: Zip file (required) -->
         <div class="upload-column martian-column-right">
-            <div id="upload-zone" role="button" tabindex="0" aria-label="Upload zone. Drop your zip file here or click to browse.">
+            <div id="upload-zone" class="upload-dropzone" role="button" tabindex="0" aria-label="Upload zone. Drop your zip file here or click to browse.">
                 <img src="/static/stripe.png" class="upload-icon" alt="">
                 <p class="primary-text">Drop your .zip file here or click to browse.</p>
                 <p class="secondary-text">Maximum file size: 50MB</p>
