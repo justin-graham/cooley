@@ -202,9 +202,6 @@ body {
     align-items: center;
     justify-content: center;
     min-height: 350px;
-}
-
-#upload-section .martian-column-left {
     border-right: none;
 }
 
@@ -301,6 +298,7 @@ p {
 
 #upload-header {
     text-align: center;
+    background-color: var(--bg-pure);
 }
 
 .monospace {
@@ -495,6 +493,18 @@ p {
     margin: 0 auto var(--spacing-md);
     display: block;
     pointer-events: none;
+}
+
+.martian-column-left .upload-dropzone {
+    padding-top: 57px;
+    padding-bottom: 57px;
+}
+
+.martian-column-left .upload-dropzone .upload-icon {
+    width: 210px;
+    height: 180px;
+    max-width: 210px;
+    max-height: 180px;
 }
 
 .upload-dropzone p {
@@ -1275,8 +1285,7 @@ button:focus-visible, .button:focus-visible {
         padding: 2.5rem 1.5rem;
     }
 
-    #upload-section .martian-column-left {
-        border-right: none;
+    #upload-section .upload-column {
         border-bottom: none;
     }
 }
