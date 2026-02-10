@@ -2165,3 +2165,287 @@ def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
         except Exception as db_error:
             logger.error(f"Failed to mark error in database: {db_error}")
             print(f"CRITICAL: Failed to mark error in database: {db_error}")
+
+
+# ============================================================================
+# CARTA CAP TABLE TIE-OUT
+# ============================================================================
+
+def parse_carta_captable(xlsx_path: str) -> Dict[str, Any]:
+    """
+    Parse a Carta-exported cap table (.xlsx) into structured data.
+    Handles multiple Carta export formats (Summary, Detailed, Certificate Ledger).
+
+    Returns:
+        Dictionary with shareholders list and total_shares
+    """
+    import openpyxl
+
+    wb = openpyxl.load_workbook(xlsx_path, data_only=True)
+    shareholders = []
+
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        # Find header row (scan first 5 rows for recognizable headers)
+        header_row = None
+        headers = []
+        for row_idx in range(1, min(6, ws.max_row + 1)):
+            row_vals = [str(cell.value).lower().strip() if cell.value else '' for cell in ws[row_idx]]
+            if any(kw in h for h in row_vals for kw in ['name', 'stakeholder']):
+                header_row = row_idx
+                headers = row_vals
+                break
+
+        if header_row is None:
+            continue
+
+        # Detect column indices
+        name_col = None
+        shares_col = None
+        ownership_col = None
+
+        for i, h in enumerate(headers):
+            if name_col is None and any(kw in h for kw in ['stakeholder name', 'name']):
+                name_col = i
+            if shares_col is None and any(kw in h for kw in ['outstanding shares', 'quantity outstanding', 'shares outstanding']):
+                shares_col = i
+            if ownership_col is None and any(kw in h for kw in ['outstanding ownership', 'fully diluted ownership']):
+                ownership_col = i
+
+        # Fallback: look for common stock column like "common (cs)"
+        if shares_col is None:
+            for i, h in enumerate(headers):
+                if 'common' in h and ('cs' in h or 'stock' in h):
+                    shares_col = i
+                    break
+
+        if name_col is None or shares_col is None:
+            continue
+
+        # Extract data rows
+        for row in ws.iter_rows(min_row=header_row + 1, values_only=True):
+            name = row[name_col] if name_col < len(row) else None
+            shares_val = row[shares_col] if shares_col < len(row) else None
+
+            if not name or not shares_val:
+                continue
+
+            name_str = str(name).strip()
+            # Skip total/summary rows
+            if name_str.lower() in ['total', 'totals', 'grand total', '']:
+                continue
+            if 'total' in name_str.lower() and ('issued' in name_str.lower() or 'outstanding' in name_str.lower()):
+                continue
+            # Skip non-stakeholder rows
+            if 'options' in name_str.lower() or 'shares available' in name_str.lower():
+                continue
+            if 'fully diluted' in name_str.lower() or 'percentage' in name_str.lower():
+                continue
+
+            # Parse shares
+            try:
+                if isinstance(shares_val, str):
+                    shares = float(shares_val.replace(',', '').replace('$', ''))
+                else:
+                    shares = float(shares_val)
+            except (ValueError, TypeError):
+                continue
+
+            if shares <= 0:
+                continue
+
+            # Parse ownership if available
+            ownership = 0.0
+            if ownership_col and ownership_col < len(row) and row[ownership_col]:
+                try:
+                    own_val = str(row[ownership_col]).replace('%', '')
+                    ownership = float(own_val)
+                except (ValueError, TypeError):
+                    pass
+
+            shareholders.append({
+                'name': name_str,
+                'shares': shares,
+                'share_class': 'Common Stock',
+                'ownership_pct': ownership
+            })
+
+        if shareholders:
+            break  # Found valid data, stop searching sheets
+
+    # Aggregate by name (Carta may have multiple certificates per person)
+    aggregated = {}
+    for sh in shareholders:
+        key = sh['name']
+        if key not in aggregated:
+            aggregated[key] = {'name': key, 'shares': 0.0, 'share_class': sh['share_class'], 'ownership_pct': 0.0}
+        aggregated[key]['shares'] += sh['shares']
+
+    shareholders = list(aggregated.values())
+    total_shares = sum(sh['shares'] for sh in shareholders)
+
+    # Recalculate ownership percentages
+    if total_shares > 0:
+        for sh in shareholders:
+            sh['ownership_pct'] = round((sh['shares'] / total_shares) * 100, 2)
+
+    return {
+        'shareholders': shareholders,
+        'total_shares': total_shares
+    }
+
+
+def _normalize_name(name: str) -> str:
+    """Normalize a shareholder name for comparison."""
+    if not name:
+        return ''
+    return name.lower().strip().replace(',', '').replace('.', '')
+
+
+def _find_best_match(name: str, candidates) -> str:
+    """Find best matching name from candidates. Returns None if no match."""
+    if not name:
+        return None
+    candidates = list(candidates)
+
+    # Exact match
+    if name in candidates:
+        return name
+
+    # Substring containment
+    for c in candidates:
+        if name in c or c in name:
+            return c
+
+    # Last-name matching
+    name_parts = name.split()
+    for c in candidates:
+        c_parts = c.split()
+        if name_parts and c_parts and name_parts[-1] == c_parts[-1]:
+            return c
+
+    return None
+
+
+def compare_cap_tables(
+    carta_shareholders: List[Dict[str, Any]],
+    generated_cap_table: List[Dict[str, Any]]
+) -> List[Dict[str, Any]]:
+    """
+    Compare Carta cap table against pipeline-generated cap table.
+    Returns list of discrepancy issues.
+    """
+    issues = []
+
+    # Build normalized-name lookups
+    gen_by_name = {}
+    for entry in generated_cap_table:
+        name = _normalize_name(entry.get('shareholder', ''))
+        gen_by_name[name] = entry
+
+    carta_by_name = {}
+    for entry in carta_shareholders:
+        name = _normalize_name(entry.get('name', ''))
+        carta_by_name[name] = entry
+
+    matched_gen_names = set()
+
+    # Check each Carta shareholder against generated cap table
+    for carta_name, carta_entry in carta_by_name.items():
+        match = _find_best_match(carta_name, gen_by_name.keys())
+
+        if match is None:
+            issues.append({
+                'severity': 'warning',
+                'category': 'Cap Table Tie-Out',
+                'description': (
+                    f'Shareholder "{carta_entry["name"]}" appears in Carta cap table '
+                    f'({carta_entry["shares"]:,.0f} shares) but was not found in source documents.'
+                )
+            })
+            continue
+
+        matched_gen_names.add(match)
+        gen_entry = gen_by_name[match]
+        carta_shares = carta_entry['shares']
+        gen_shares = float(gen_entry.get('shares', 0))
+
+        # Compare share counts (tolerance of 0.5 for rounding)
+        if abs(carta_shares - gen_shares) > 0.5:
+            issues.append({
+                'severity': 'critical',
+                'category': 'Cap Table Tie-Out',
+                'description': (
+                    f'Share count mismatch for "{carta_entry["name"]}": '
+                    f'Carta shows {carta_shares:,.0f} shares, '
+                    f'source documents show {gen_shares:,.0f} shares. '
+                    f'Discrepancy: {abs(carta_shares - gen_shares):,.0f} shares.'
+                )
+            })
+
+    # Check for shareholders in source documents but not in Carta
+    for gen_name, gen_entry in gen_by_name.items():
+        if gen_name not in matched_gen_names:
+            issues.append({
+                'severity': 'warning',
+                'category': 'Cap Table Tie-Out',
+                'description': (
+                    f'Shareholder "{gen_entry["shareholder"]}" found in source documents '
+                    f'({float(gen_entry.get("shares", 0)):,.0f} shares) but not in Carta cap table.'
+                )
+            })
+
+    # Compare total shares
+    carta_total = sum(sh['shares'] for sh in carta_shareholders)
+    gen_total = sum(float(e.get('shares', 0)) for e in generated_cap_table)
+    if abs(carta_total - gen_total) > 0.5:
+        issues.append({
+            'severity': 'critical',
+            'category': 'Cap Table Tie-Out',
+            'description': (
+                f'Total share count mismatch: Carta shows {carta_total:,.0f} total shares, '
+                f'source documents show {gen_total:,.0f} total shares. '
+                f'Discrepancy: {abs(carta_total - gen_total):,.0f} shares.'
+            )
+        })
+
+    return issues
+
+
+def tieout_carta_captable(audit_id: str, captable_path: str):
+    """
+    Compare uploaded Carta cap table against the generated cap table.
+    Appends discrepancies as issues to the audit.
+    """
+    # Parse Carta cap table
+    carta_data = parse_carta_captable(captable_path)
+
+    if not carta_data['shareholders']:
+        logger.warning(f"Could not parse Carta cap table for audit {audit_id}")
+        db.append_issues(audit_id, [{
+            'severity': 'warning',
+            'category': 'Cap Table Tie-Out',
+            'description': 'Uploaded cap table could not be parsed. Ensure it is a standard Carta export (.xlsx).'
+        }])
+        return
+
+    # Fetch the generated cap table
+    audit = db.get_audit(audit_id)
+    generated_cap_table = audit.get('cap_table', []) if audit else []
+
+    if not generated_cap_table:
+        logger.warning(f"No generated cap table to compare against for audit {audit_id}")
+        return
+
+    # Compare and generate issues
+    issues = compare_cap_tables(carta_data['shareholders'], generated_cap_table)
+
+    if issues:
+        db.append_issues(audit_id, issues)
+        logger.info(f"Cap table tie-out found {len(issues)} discrepancies for audit {audit_id}")
+    else:
+        db.append_issues(audit_id, [{
+            'severity': 'info',
+            'category': 'Cap Table Tie-Out',
+            'description': f'Carta cap table matches source documents. All {len(carta_data["shareholders"])} shareholders verified.'
+        }])

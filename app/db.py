@@ -100,6 +100,27 @@ def update_progress(audit_id: str, progress_message: str) -> None:
         logger.error(f"Failed to update progress for audit {audit_id}: {e}")
 
 
+def append_issues(audit_id: str, new_issues: list) -> None:
+    """
+    Append new issues to an existing audit's issues list.
+    Used by cap table tie-out to add comparison results after the main pipeline.
+    """
+    try:
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    UPDATE audits
+                    SET issues = COALESCE(issues, '[]'::jsonb) || %s::jsonb
+                    WHERE id = %s
+                    """,
+                    (Json(new_issues), audit_id)
+                )
+            conn.commit()
+    except Exception as e:
+        logger.error(f"Failed to append issues for audit {audit_id}: {e}")
+
+
 def update_audit_results(audit_id: str, results: Dict[str, Any]) -> None:
     """
     Save final audit results and mark as complete.

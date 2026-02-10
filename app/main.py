@@ -199,16 +199,18 @@ async def app_page(user_id: str = Depends(auth.get_current_user)):
 async def upload_audit(
     file: UploadFile,
     background_tasks: BackgroundTasks,
-    user_id: str = Depends(auth.get_current_user)
+    user_id: str = Depends(auth.get_current_user),
+    captable: Optional[UploadFile] = None
 ):
     """
-    Accept a zip file upload and start background processing.
+    Accept a zip file upload and optional Carta cap table, then start background processing.
     Requires authentication.
 
     Args:
-        file: UploadFile object from multipart form
+        file: UploadFile object from multipart form (.zip)
         background_tasks: FastAPI background tasks manager
         user_id: Authenticated user ID (from session)
+        captable: Optional Carta cap table export (.xlsx)
 
     Returns:
         JSON with audit_id for status polling
@@ -238,15 +240,28 @@ async def upload_audit(
         os.remove(temp_zip_path)
         raise HTTPException(status_code=400, detail=error_msg)
 
+    # Save cap table file if provided
+    temp_captable_path = None
+    if captable and captable.filename and captable.filename.endswith('.xlsx'):
+        temp_captable_path = os.path.join(tempfile.gettempdir(), f"{audit_id}_captable.xlsx")
+        try:
+            with open(temp_captable_path, "wb") as f:
+                shutil.copyfileobj(captable.file, f)
+        except Exception as e:
+            logger.warning(f"Failed to save cap table upload: {e}")
+            temp_captable_path = None
+
     # Create audit record in database with user_id
     try:
         db.create_audit(audit_id, upload_filename=file.filename, user_id=user_id)
     except Exception as e:
         os.remove(temp_zip_path)
+        if temp_captable_path and os.path.exists(temp_captable_path):
+            os.remove(temp_captable_path)
         raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
 
     # Start background processing
-    background_tasks.add_task(process_documents_task, audit_id, temp_zip_path)
+    background_tasks.add_task(process_documents_task, audit_id, temp_zip_path, temp_captable_path)
 
     return {"audit_id": audit_id, "message": "Processing started"}
 
@@ -872,7 +887,7 @@ async def preview_issues_report(audit_id: str, user_id: str = Depends(auth.get_c
 # BACKGROUND TASK
 # ============================================================================
 
-def process_documents_task(audit_id: str, zip_path: str):
+def process_documents_task(audit_id: str, zip_path: str, captable_path: str = None):
     """
     Background task to process uploaded documents.
     Sync function to avoid blocking FastAPI event loop with sync DB/file operations.
@@ -880,6 +895,7 @@ def process_documents_task(audit_id: str, zip_path: str):
     Args:
         audit_id: UUID of the audit
         zip_path: Path to the uploaded zip file
+        captable_path: Optional path to uploaded Carta cap table (.xlsx)
     """
     extract_dir = None
     temp_dir = None
@@ -1017,6 +1033,14 @@ def process_documents_task(audit_id: str, zip_path: str):
         # Run AI processing pipeline
         processing.process_audit(audit_id, documents)
 
+        # Tie out uploaded Carta cap table against generated cap table
+        if captable_path and os.path.exists(captable_path):
+            try:
+                db.update_progress(audit_id, "Comparing uploaded cap table with source documents...")
+                processing.tieout_carta_captable(audit_id, captable_path)
+            except Exception as e:
+                logger.warning(f"Cap table tie-out failed for audit {audit_id}: {e}")
+
         logger.info(f"Successfully completed audit {audit_id}")
 
     except Exception as e:
@@ -1039,6 +1063,8 @@ def process_documents_task(audit_id: str, zip_path: str):
                 shutil.rmtree(extract_dir)
             if temp_dir and os.path.exists(temp_dir):
                 shutil.rmtree(temp_dir)
+            if captable_path and os.path.exists(captable_path):
+                os.remove(captable_path)
         except Exception:
             pass  # Ignore cleanup errors
 

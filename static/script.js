@@ -17,6 +17,9 @@ const progressStep = document.getElementById('progress-step');
 const progressText = document.getElementById('progress-text');
 const resultsSection = document.getElementById('results');
 const uploadSection = document.getElementById('upload-section');
+const captableUploadZone = document.getElementById('captable-upload-zone');
+const captableFileInput = document.getElementById('captable-file-input');
+let selectedCaptableFile = null;
 
 // ============================================================================
 // DATA ROOM MAPPING
@@ -153,7 +156,7 @@ async function loadDemoMode() {
         progressText.textContent = `Error loading demo: ${error.message}`;
         setTimeout(() => {
             progressSection.style.display = 'none';
-            uploadSection.style.display = 'block';
+            uploadSection.style.display = 'grid';
         }, 3000);
     }
 }
@@ -317,6 +320,46 @@ uploadZone.addEventListener('drop', (e) => {
     }
 });
 
+// ============================================================================
+// CAP TABLE UPLOAD HANDLING
+// ============================================================================
+
+function handleCaptableFile(file) {
+    if (!file.name.endsWith('.xlsx')) {
+        alert('Please upload a .xlsx file (Carta export)');
+        return;
+    }
+    selectedCaptableFile = file;
+    captableUploadZone.classList.add('file-selected');
+    captableUploadZone.querySelector('.primary-text').textContent = file.name;
+    captableUploadZone.querySelector('.secondary-text').textContent = 'Cap table selected. Now upload your .zip file.';
+}
+
+captableUploadZone.addEventListener('click', () => {
+    captableFileInput.click();
+});
+
+captableFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleCaptableFile(file);
+});
+
+captableUploadZone.addEventListener('dragover', (e) => {
+    e.preventDefault();
+    captableUploadZone.classList.add('dragging');
+});
+
+captableUploadZone.addEventListener('dragleave', () => {
+    captableUploadZone.classList.remove('dragging');
+});
+
+captableUploadZone.addEventListener('drop', (e) => {
+    e.preventDefault();
+    captableUploadZone.classList.remove('dragging');
+    const file = e.dataTransfer.files[0];
+    if (file) handleCaptableFile(file);
+});
+
 /**
  * Upload file to server and start processing
  */
@@ -341,9 +384,12 @@ async function handleFileUpload(file) {
     progressText.textContent = 'Uploading zip file...';
 
     try {
-        // Upload file
+        // Upload file (and optional cap table)
         const formData = new FormData();
         formData.append('file', file);
+        if (selectedCaptableFile) {
+            formData.append('captable', selectedCaptableFile);
+        }
 
         const response = await fetch('/upload', {
             method: 'POST',
@@ -366,7 +412,7 @@ async function handleFileUpload(file) {
         progressText.textContent = `Error: ${error.message}`;
         setTimeout(() => {
             progressSection.style.display = 'none';
-            uploadSection.style.display = 'block';
+            uploadSection.style.display = 'grid';
         }, 3000);
     }
 }
@@ -1674,7 +1720,7 @@ function hideAllSections() {
 function showUploadPage() {
     if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
     hideAllSections();
-    uploadSection.style.display = 'block';
+    uploadSection.style.display = 'grid';
     document.getElementById('upload-header').style.display = 'block';
     setHomeLinkVisibility(false);
 
@@ -1686,6 +1732,14 @@ function showUploadPage() {
         <p id="progress-step" class="progress-step">Processing</p>
         <p id="progress-text" class="progress-text" aria-live="polite" aria-busy="true">Starting...</p>
     `;
+
+    // Reset cap table upload state
+    selectedCaptableFile = null;
+    if (captableUploadZone) {
+        captableUploadZone.classList.remove('file-selected');
+        captableUploadZone.querySelector('.primary-text').textContent = 'Drop your cap table here';
+        captableUploadZone.querySelector('.secondary-text').textContent = 'Optional. Carta export (.xlsx)';
+    }
 }
 
 // Event listeners

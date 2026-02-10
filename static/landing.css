@@ -126,8 +126,8 @@
     border: 1px solid #111827;
     margin: 8px;
     overflow: hidden;
-    background-color: #E8F1F8;
-    background-image: radial-gradient(circle at 1px 1px, rgba(51, 76, 106, 0.28) 1px, transparent 0);
+    background-color: #f3f4f6;
+    background-image: radial-gradient(circle at 1px 1px, rgba(31, 41, 55, 0.2) 1px, transparent 0);
     background-size: 20px 20px;
     height: 364px;
 }
