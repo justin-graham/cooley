@@ -65,6 +65,9 @@ Use this checklist before deploying to production.
 - [ ] File type validation (only .zip accepted)
 - [ ] Database connection uses environment variables
 - [ ] CORS is configured appropriately
+- [ ] CSRF protection enabled on cookie-authenticated POST endpoints
+- [ ] Session storage is durable (DB/Redis), not in-memory
+- [ ] Auth/upload routes are rate-limited
 
 ## Documentation
 
@@ -109,15 +112,15 @@ Document these for users:
 - [ ] Max upload size: 50MB
 - [ ] Supported file types: PDF, DOCX, XLSX, PPTX
 - [ ] Processing time: 1-5 minutes for 50 docs
-- [ ] No authentication (public access)
+- [ ] Authentication exists but has not been load-tested for multi-instance deployment
 - [ ] No data persistence beyond database
-- [ ] Single processing queue (no concurrency)
+- [ ] Parsing throughput tuned for correctness over throughput
 
 ## Future Enhancements
 
 Ideas for v2:
 
-- [ ] User authentication
+- [ ] SSO / enterprise identity providers
 - [ ] Save/export results (PDF, Excel)
 - [ ] Re-run analysis on existing audits
 - [ ] Support for additional file types

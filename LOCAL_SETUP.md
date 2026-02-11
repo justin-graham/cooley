@@ -63,13 +63,13 @@ docker exec -i corporate-audit-db psql -U postgres -d corporate_audit < schema.s
 
 ```bash
 # Copy example env file
-cp .env.example .env
+cp .env.example .env.local
 
-# Edit .env with your values
-nano .env  # or use your preferred editor
+# Edit .env.local with your values
+nano .env.local  # or use your preferred editor
 ```
 
-**Required values in `.env`**:
+**Required values in `.env.local`**:
 
 ```bash
 # Your Claude API key
@@ -77,6 +77,12 @@ ANTHROPIC_API_KEY=sk-ant-your-key-here
 
 # Local database URL
 DATABASE_URL=postgresql://postgres:postgres@localhost:5432/corporate_audit
+
+# Comma-separated origins allowed to use cookies with API
+ALLOWED_ORIGINS=http://localhost:8000,http://127.0.0.1:8000
+
+# Set LOCAL_DEV for non-secure cookies in local HTTP
+LOCAL_DEV=1
 ```
 
 ## Step 4: Run the Application
@@ -202,7 +208,7 @@ sudo systemctl start postgresql
 #### Issue: `ANTHROPIC_API_KEY not set`
 
 **Fix**:
-1. Ensure `.env` file exists in project root
+1. Ensure `.env.local` file exists in project root
 2. Verify it contains `ANTHROPIC_API_KEY=sk-ant-...`
 3. Restart the uvicorn server
 

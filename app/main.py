@@ -12,12 +12,14 @@ import uuid
 import shutil
 import tempfile
 import logging
+import multiprocessing
+from queue import Empty as QueueEmpty
+from threading import Lock
+from collections import deque
 from datetime import date, datetime
 from decimal import Decimal
 from typing import List, Optional, Dict, Any
 from collections import defaultdict
-from functools import lru_cache  # kept for potential future use
-from concurrent.futures import ThreadPoolExecutor, TimeoutError
 from fastapi import FastAPI, UploadFile, BackgroundTasks, HTTPException, Query, Depends, Request, Response, Form
 from io import BytesIO
 from fastapi.staticfiles import StaticFiles
@@ -32,11 +34,23 @@ load_dotenv()  # Load .env as fallback
 
 from app import db, utils, processing, auth
 
+logger = logging.getLogger(__name__)
+
 # Validate required env vars
 if not os.getenv("ANTHROPIC_API_KEY"):
     raise ValueError("ANTHROPIC_API_KEY environment variable not set")
 if not os.getenv("DATABASE_URL"):
     raise ValueError("DATABASE_URL environment variable not set")
+
+
+def _env_flag(name: str, default: bool = False) -> bool:
+    """
+    Parse common truthy/falsey env var values.
+    """
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
 
 
 # Initialize FastAPI app
@@ -46,14 +60,69 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# CORS middleware (allow all origins for MVP)
+# CORS middleware
+ALLOWED_ORIGINS = [
+    origin.strip()
+    for origin in os.getenv(
+        "ALLOWED_ORIGINS",
+        "https://tieout.onrender.com,http://localhost:8000,http://127.0.0.1:8000"
+    ).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "DELETE"],
+    allow_headers=["Content-Type", "X-CSRF-Token"],
 )
+
+# Basic in-memory rate limiter (per-process)
+_rate_limit_lock = Lock()
+_rate_limit_buckets: Dict[str, deque] = {}
+
+
+def _enforce_rate_limit(scope: str, key: str, limit: int, window_seconds: int) -> None:
+    """
+    Sliding-window rate limit. Raises HTTPException(429) when exceeded.
+    """
+    bucket_key = f"{scope}:{key}"
+    now = datetime.utcnow().timestamp()
+    cutoff = now - window_seconds
+
+    with _rate_limit_lock:
+        events = _rate_limit_buckets.setdefault(bucket_key, deque())
+        while events and events[0] < cutoff:
+            events.popleft()
+
+        if len(events) >= limit:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Too many requests for {scope}. Please wait and try again."
+            )
+
+        events.append(now)
+
+
+def _client_identity(request: Request) -> str:
+    """
+    Get client identity for rate limiting.
+    """
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    """Attach baseline security headers to every response."""
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    return response
 
 # Mount static files (CSS, JS, HTML)
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -65,6 +134,7 @@ app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.post("/api/auth/login")
 async def login(
+    request: Request,
     response: Response,
     username: str = Form(...),
     password: str = Form(...)
@@ -83,6 +153,8 @@ async def login(
     Raises:
         HTTPException: 401 if credentials are invalid
     """
+    _enforce_rate_limit("login", _client_identity(request), limit=12, window_seconds=60)
+
     # Get user from database
     user = db.get_user_by_username(username)
 
@@ -93,18 +165,26 @@ async def login(
         )
 
     # Create session
-    session_token = auth.create_session(str(user['id']))
+    session_token, csrf_token = auth.create_session(str(user['id']))
 
-    # Set cookie
     response.set_cookie(
         key="session_token",
         value=session_token,
         httponly=True,
         max_age=60 * 60 * 24,  # 24 hours
-        samesite="lax"
+        samesite="lax",
+        path="/"
+    )
+    response.set_cookie(
+        key="csrf_token",
+        value=csrf_token,
+        httponly=False,
+        max_age=60 * 60 * 24,
+        samesite="lax",
+        path="/"
     )
 
-    return {"message": "Login successful", "username": user['username']}
+    return {"message": "Login successful", "username": user['username'], "csrf_token": csrf_token}
 
 
 @app.post("/api/auth/logout")
@@ -115,11 +195,14 @@ async def logout(request: Request, response: Response):
     Returns:
         Success message
     """
+    auth.validate_csrf(request)
+
     session_token = request.cookies.get("session_token")
     if session_token:
         auth.delete_session(session_token)
 
     response.delete_cookie("session_token")
+    response.delete_cookie("csrf_token")
     return {"message": "Logout successful"}
 
 
@@ -142,7 +225,7 @@ async def get_current_user_info(user_id: str = Depends(auth.get_current_user)):
 
 
 @app.post("/api/access-request")
-async def request_access(email: str = Form(...)):
+async def request_access(request: Request, email: str = Form(...)):
     """
     Store access code request email.
 
@@ -155,6 +238,8 @@ async def request_access(email: str = Form(...)):
     Raises:
         HTTPException: 400 if email is invalid
     """
+    _enforce_rate_limit("access_request", _client_identity(request), limit=15, window_seconds=300)
+
     # Basic email validation
     if "@" not in email or "." not in email:
         raise HTTPException(status_code=400, detail="Invalid email address")
@@ -197,6 +282,7 @@ async def app_page(user_id: str = Depends(auth.get_current_user)):
 
 @app.post("/upload")
 async def upload_audit(
+    request: Request,
     file: UploadFile,
     background_tasks: BackgroundTasks,
     user_id: str = Depends(auth.get_current_user),
@@ -218,6 +304,9 @@ async def upload_audit(
     Raises:
         HTTPException: 401 if not authenticated, 400 if invalid file
     """
+    auth.validate_csrf(request)
+    _enforce_rate_limit("upload", f"{user_id}:{_client_identity(request)}", limit=20, window_seconds=3600)
+
     # Validate file type
     if not file.filename or not file.filename.endswith('.zip'):
         raise HTTPException(status_code=400, detail="Only .zip files are accepted")
@@ -232,7 +321,8 @@ async def upload_audit(
         with open(temp_zip_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to save upload: {str(e)}")
+        logger.error(f"Failed to save upload: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Upload failed. Please try again.")
 
     # Validate zip file
     is_valid, error_msg = utils.validate_zip_file(temp_zip_path, max_size_mb=50)
@@ -258,7 +348,8 @@ async def upload_audit(
         os.remove(temp_zip_path)
         if temp_captable_path and os.path.exists(temp_captable_path):
             os.remove(temp_captable_path)
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        logger.error(f"Database error creating audit: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to start audit. Please try again.")
 
     # Start background processing
     background_tasks.add_task(process_documents_task, audit_id, temp_zip_path, temp_captable_path)
@@ -285,7 +376,8 @@ async def get_status(audit_id: str, user_id: str = Depends(auth.get_current_user
     try:
         audit = db.get_audit(audit_id)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Database error: {str(e)}")
+        logger.error(f"Database error fetching audit {audit_id}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to retrieve audit status. Please try again.")
 
     if not audit:
         raise HTTPException(status_code=404, detail="Audit not found")
@@ -296,12 +388,15 @@ async def get_status(audit_id: str, user_id: str = Depends(auth.get_current_user
 
     response = {
         "status": audit['status'],
+        "pipeline_state": audit.get('pipeline_state') or audit['status'],
         "progress": audit.get('progress', ''),
+        "quality_report": audit.get('quality_report') or {},
+        "review_required": bool(audit.get('review_required')),
         "results": None,
         "error": None
     }
 
-    if audit['status'] == 'complete':
+    if audit['status'] in {'complete', 'needs_review'}:
         response['results'] = {
             "company_name": audit.get('company_name'),
             "documents": audit.get('documents'),
@@ -356,7 +451,8 @@ async def list_audits(user_id: str = Depends(auth.get_current_user)):
 
         return JSONResponse(content=audits)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch audits: {str(e)}")
+        logger.error(f"Failed to fetch audits: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load audit history. Please try again.")
 
 
 # ============================================================================
@@ -437,7 +533,8 @@ async def get_equity_events(audit_id: str, user_id: str = Depends(auth.get_curre
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch events: {str(e)}")
+        logger.error(f"Failed to fetch events: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load equity events. Please try again.")
 
 
 @app.get("/api/audits/{audit_id}/captable", response_model=CapTableState)
@@ -545,7 +642,8 @@ async def get_cap_table_at_time(
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to calculate cap table: {str(e)}")
+        logger.error(f"Failed to calculate cap table: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to calculate cap table. Please try again.")
 
 
 @app.get("/api/audits/{audit_id}/options")
@@ -571,6 +669,8 @@ async def get_option_pool(
         audit = db.get_audit(audit_id)
         if not audit:
             raise HTTPException(status_code=404, detail="Audit not found")
+        if str(audit.get('user_id', '')) != user_id:
+            raise HTTPException(status_code=403, detail="Access denied")
 
         # Parse date filter
         if as_of_date:
@@ -589,8 +689,8 @@ async def get_option_pool(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get option pool: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Failed to get option pool: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load option pool. Please try again.")
 
 
 def _get_equity_events(audit_id: str) -> List[Dict[str, Any]]:
@@ -648,7 +748,8 @@ async def get_document(audit_id: str, doc_id: str, user_id: str = Depends(auth.g
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch document: {str(e)}")
+        logger.error(f"Failed to fetch document: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Failed to load document. Please try again.")
 
 
 # ============================================================================
@@ -699,7 +800,7 @@ async def download_minute_book(audit_id: str, user_id: str = Depends(auth.get_cu
         raise
     except Exception as e:
         logger.error(f"Failed to generate minute book: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to generate minute book: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate minute book. Please try again.")
 
 
 @app.get("/api/audits/{audit_id}/download/issues")
@@ -746,7 +847,7 @@ async def download_issues_report(audit_id: str, user_id: str = Depends(auth.get_
         raise
     except Exception as e:
         logger.error(f"Failed to generate issues report: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to generate issues report: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate issues report. Please try again.")
 
 
 @app.get("/api/audits/{audit_id}/download/minute-document")
@@ -804,7 +905,7 @@ async def download_minute_document_pdf(audit_id: str, user_id: str = Depends(aut
         raise
     except Exception as e:
         logger.error(f"Failed to generate minute document PDF: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to generate minute document: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to generate minute document. Please try again.")
 
 
 @app.get("/api/audits/{audit_id}/preview/minute-book")
@@ -887,6 +988,73 @@ async def preview_issues_report(audit_id: str, user_id: str = Depends(auth.get_c
 # BACKGROUND TASK
 # ============================================================================
 
+def _parse_document_worker(file_path: str, result_queue) -> None:
+    """Isolated parser worker for hard timeout enforcement."""
+    try:
+        result_queue.put({
+            'ok': True,
+            'result': utils.parse_document_robust(file_path)
+        })
+    except Exception as exc:
+        result_queue.put({
+            'ok': False,
+            'error': str(exc)
+        })
+
+
+def _parse_document_isolated(file_path: str, timeout_seconds: int) -> Dict[str, Any]:
+    """
+    Parse a single file in its own process so hung parsers can be terminated safely.
+    """
+    filename = os.path.basename(file_path)
+    ext = os.path.splitext(filename)[1].lstrip('.')
+    ctx = multiprocessing.get_context("spawn")
+    result_queue = ctx.Queue(maxsize=1)
+    proc = ctx.Process(target=_parse_document_worker, args=(file_path, result_queue))
+    proc.start()
+    proc.join(timeout_seconds)
+
+    if proc.is_alive():
+        proc.terminate()
+        proc.join(2)
+        return {
+            'filename': filename,
+            'type': ext,
+            'text': '',
+            'parse_status': 'error',
+            'parse_error': f'Document parsing timed out after {timeout_seconds} seconds',
+            'error': f'Document parsing timed out after {timeout_seconds} seconds'
+        }
+
+    try:
+        payload = result_queue.get_nowait()
+    except QueueEmpty:
+        return {
+            'filename': filename,
+            'type': ext,
+            'text': '',
+            'parse_status': 'error',
+            'parse_error': 'Parser exited without returning a result',
+            'error': 'Parser exited without returning a result'
+        }
+
+    if payload.get('ok'):
+        result = payload.get('result') or {}
+        if result.get('error') and not result.get('parse_error'):
+            result['parse_error'] = result['error']
+        return result
+
+    error_text = payload.get('error', 'Unknown parser error')
+    return {
+        'filename': filename,
+        'type': ext,
+        'text': '',
+        'parse_status': 'error',
+        'parse_error': error_text,
+        'error': error_text
+    }
+
+
 def process_documents_task(audit_id: str, zip_path: str, captable_path: str = None):
     """
     Background task to process uploaded documents.
@@ -899,14 +1067,13 @@ def process_documents_task(audit_id: str, zip_path: str, captable_path: str = No
     """
     extract_dir = None
     temp_dir = None
-    logger = logging.getLogger(__name__)
 
     try:
         logger.info(f"Starting processing for audit {audit_id}")
 
         # Update progress
         try:
-            db.update_progress(audit_id, "Extracting files from archive...")
+            db.update_progress(audit_id, "Extracting files from archive...", pipeline_state='parsing')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
@@ -927,103 +1094,75 @@ def process_documents_task(audit_id: str, zip_path: str, captable_path: str = No
         logger.info(f"Extracted {len(extracted_files)} supported files for audit {audit_id}")
 
         try:
-            db.update_progress(audit_id, f"Found {len(extracted_files)} documents. Parsing...")
+            db.update_progress(audit_id, f"Found {len(extracted_files)} documents. Parsing...", pipeline_state='parsing')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
-        # Parse each document with a single shared executor for timeout enforcement
+        parser_timeout_seconds = int(os.getenv("PARSER_TIMEOUT_SECONDS", "45"))
+
+        # Parse each document in an isolated process with hard timeout enforcement.
         documents = []
-        executor = ThreadPoolExecutor(max_workers=1)
-        try:
-            for i, file_info in enumerate(extracted_files, start=1):
-                file_path = file_info['path']
-                filename = file_info['original_name']
+        for i, file_info in enumerate(extracted_files, start=1):
+            file_path = file_info['path']
+            filename = file_info['original_name']
 
-                # Update progress every 5 docs, on first, and on last
-                if i % 5 == 1 or i == 1 or i == len(extracted_files):
-                    try:
-                        display_name = filename[:40] + "..." if len(filename) > 40 else filename
-                        db.update_progress(audit_id, f"Parsing document {i}/{len(extracted_files)}: {display_name}")
-                    except Exception as e:
-                        logger.error(f"Failed to update progress: {e}")
-
-                doc_id = str(uuid.uuid4())
-                logger.info(f"Parsing document {i}/{len(extracted_files)}: {filename}")
-
-                # Determine file type and convert to PDF if needed for preview generation
-                file_ext = os.path.splitext(filename)[1].lower()
-                pdf_path = None
-                text_spans = None
-
+            # Update progress every 5 docs, on first, and on last
+            if i % 5 == 1 or i == 1 or i == len(extracted_files):
                 try:
-                    if file_ext in ['.docx', '.xlsx', '.pptx']:
+                    display_name = filename[:40] + "..." if len(filename) > 40 else filename
+                    db.update_progress(
+                        audit_id,
+                        f"Parsing document {i}/{len(extracted_files)}: {display_name}",
+                        pipeline_state='parsing'
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to update progress: {e}")
+
+            doc_id = str(uuid.uuid4())
+            logger.info(f"Parsing document {i}/{len(extracted_files)}: {filename}")
+
+            # Determine file type and convert to PDF if needed for preview generation
+            file_ext = os.path.splitext(filename)[1].lower()
+            pdf_path = None
+            text_spans = None
+
+            try:
+                if file_ext == '.pdf':
+                    pdf_path = file_path
+                # Skip Office→PDF conversion if LibreOffice not available
+                elif file_ext in ['.docx', '.xlsx', '.pptx']:
+                    import shutil
+                    if shutil.which('libreoffice'):
                         logger.info(f"Converting {filename} to PDF for preview generation")
                         pdf_path = utils.convert_to_pdf(file_path, temp_dir)
-                        logger.info(f"Converted {filename} to PDF: {pdf_path}")
-                    elif file_ext == '.pdf':
-                        pdf_path = file_path
 
-                    if pdf_path:
-                        logger.info(f"Extracting bbox data from {filename}")
-                        bbox_result = utils.parse_pdf_with_bboxes(pdf_path)
-                        text_spans = bbox_result['text_spans']
-                        logger.info(f"Extracted {len(text_spans)} text spans from {filename}")
-                except Exception as e:
-                    logger.warning(f"Failed to convert/extract bbox for {filename}: {e}")
-
-                # Parse document with timeout
-                future = executor.submit(utils.parse_document, file_path)
-                try:
-                    doc = future.result(timeout=20)
-                    logger.info(f"Successfully parsed: {filename}")
-                except TimeoutError:
-                    logger.error(f"Timeout parsing {filename} after 20 seconds")
-                    if file_ext == '.pdf':
-                        logger.info(f"Attempting fallback extraction for {filename}")
-                        try:
-                            text = utils.extract_from_pdf_fallback(file_path)
-                            doc = {
-                                'filename': filename,
-                                'type': 'pdf',
-                                'text': text,
-                                'summary': 'Parsed with fast fallback method (markdown structure not preserved)'
-                            }
-                            logger.info(f"Fallback extraction succeeded for {filename}")
-                        except Exception as fallback_error:
-                            logger.error(f"Fallback extraction also failed for {filename}: {fallback_error}")
-                            doc = {
-                                'filename': filename,
-                                'type': 'pdf',
-                                'text': '',
-                                'error': f'Timeout after 20s, fallback also failed: {str(fallback_error)}'
-                            }
-                    else:
-                        doc = {
-                            'filename': filename,
-                            'type': file_ext.lstrip('.'),
-                            'text': '',
-                            'error': 'Document parsing timed out after 20 seconds'
-                        }
-                except Exception as e:
-                    logger.error(f"Error parsing {filename}: {e}")
-                    doc = {
-                        'filename': filename,
-                        'type': os.path.splitext(filename)[1].lstrip('.'),
-                        'text': '',
-                        'error': f'Parsing failed: {str(e)}'
-                    }
-
-                # Use the original filename from the zip
-                doc['filename'] = filename
-                doc['id'] = doc_id
                 if pdf_path:
-                    doc['pdf_path'] = pdf_path
-                if text_spans:
-                    doc['text_spans'] = text_spans
+                    bbox_result = utils.parse_pdf_with_bboxes(pdf_path)
+                    text_spans = bbox_result['text_spans']
+                    logger.info(f"Extracted {len(text_spans)} text spans from {filename}")
+            except Exception as e:
+                logger.warning(f"Failed to extract bbox for {filename}: {e}")
 
-                documents.append(doc)
-        finally:
-            executor.shutdown(wait=False, cancel_futures=True)
+            # Parse document in isolated worker with hard timeout.
+            doc = _parse_document_isolated(file_path, parser_timeout_seconds)
+            if doc.get('parse_status') in {'success', 'partial'}:
+                logger.info(f"Successfully parsed: {filename} ({doc.get('parse_status')})")
+            else:
+                logger.error(f"Failed to parse {filename}: {doc.get('parse_error') or doc.get('error')}")
+
+            # Use the original filename from the zip
+            doc['filename'] = filename
+            doc['id'] = doc_id
+            if doc.get('error') and not doc.get('parse_error'):
+                doc['parse_error'] = doc.get('error')
+            if not doc.get('parse_status'):
+                doc['parse_status'] = 'error' if doc.get('error') else 'success'
+            if pdf_path:
+                doc['pdf_path'] = pdf_path
+            if text_spans:
+                doc['text_spans'] = text_spans
+
+            documents.append(doc)
 
         if not documents:
             raise ValueError("No parseable documents found")
@@ -1036,7 +1175,11 @@ def process_documents_task(audit_id: str, zip_path: str, captable_path: str = No
         # Tie out uploaded Carta cap table against generated cap table
         if captable_path and os.path.exists(captable_path):
             try:
-                db.update_progress(audit_id, "Comparing uploaded cap table with source documents...")
+                db.update_progress(
+                    audit_id,
+                    "Comparing uploaded cap table with source documents...",
+                    pipeline_state='reconciling'
+                )
                 processing.tieout_carta_captable(audit_id, captable_path)
             except Exception as e:
                 logger.warning(f"Cap table tie-out failed for audit {audit_id}: {e}")
@@ -1081,6 +1224,13 @@ async def startup_event():
         level=logging.INFO,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
+
+    try:
+        removed = db.cleanup_expired_sessions()
+        if removed:
+            logger.info(f"Removed {removed} expired sessions on startup")
+    except Exception as e:
+        logger.warning(f"Session cleanup failed on startup: {e}")
 
     print("🚀 Corporate Governance Audit Platform API started")
     print(f"📊 Database: {os.getenv('DATABASE_URL', 'Not configured')[:50]}...")

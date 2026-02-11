@@ -28,8 +28,8 @@ AI-powered platform that automates corporate legal document audits. Upload a .zi
 
 2. **Set up environment**:
    ```bash
-   cp .env.example .env
-   # Edit .env with your ANTHROPIC_API_KEY and DATABASE_URL
+   cp .env.example .env.local
+   # Edit .env.local with your ANTHROPIC_API_KEY and DATABASE_URL
    ```
 
 3. **Initialize database**:
@@ -50,7 +50,7 @@ AI-powered platform that automates corporate legal document audits. Upload a .zi
 2. Create new Web Service on Render
 3. Connect GitHub repo
 4. Add Postgres database (one-click add-on)
-5. Set environment variables: `ANTHROPIC_API_KEY`
+5. Set environment variables: `ANTHROPIC_API_KEY`, `DATABASE_URL`, `ALLOWED_ORIGINS`
 6. Start command: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 7. Run migration: `psql $DATABASE_URL < schema.sql`
 
@@ -79,6 +79,13 @@ Results stored in Postgres
     ↓
 Frontend polls status & displays results
 ```
+
+## Output Quality Gates
+
+- `status` now includes explicit pipeline states: `queued`, `parsing`, `classifying`, `extracting`, `reconciling`, `needs_review`, `complete`, `error`
+- every `/status/{audit_id}` response includes:
+  - `quality_report`: structured extraction/reconciliation quality diagnostics
+  - `review_required`: fail-closed legal gate when confidence/evidence is insufficient
 
 ## License
 

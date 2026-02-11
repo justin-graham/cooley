@@ -473,6 +473,12 @@ p {
     transform: translateY(-2px);
 }
 
+.upload-dropzone.uploading {
+    pointer-events: none;
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .upload-dropzone.dragging {
     background: var(--accent-light);
     border-color: #000;
@@ -2236,6 +2242,11 @@ button:focus-visible, .button:focus-visible {
     border-bottom: 1px solid var(--border);
 }
 
+.cap-table td:first-child {
+    font-family: var(--font-sans);
+    font-weight: 500;
+}
+
 .cap-table tr:hover {
     background: rgba(0, 0, 0, 0.02);
 }
@@ -2801,9 +2812,20 @@ button:focus-visible, .button:focus-visible {
     top: 50%;
     left: 0;
     right: 0;
-    height: 2px;
+    height: 1px;
     background: var(--gray-300);
     transform: translateY(-50%);
+}
+
+.timeline-line-active {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 0;
+    height: 1px;
+    background: var(--text);
+    transform: translateY(-50%);
+    transition: width 150ms ease-out;
 }
 
 .timeline-node-wrapper {
@@ -2816,22 +2838,25 @@ button:focus-visible, .button:focus-visible {
 }
 
 .timeline-node {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-    background: var(--accent);
-    transition: transform 150ms ease, box-shadow 150ms ease;
-    box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+    width: 1px;
+    height: 16px;
+    background: var(--gray-400);
+    transition: height 150ms ease, background-color 150ms ease;
 }
 
 .timeline-node:hover {
-    transform: scale(1.4);
+    height: 22px;
+    background: var(--text);
 }
 
 .timeline-node.selected {
-    width: 16px;
-    height: 16px;
-    box-shadow: 0 0 0 4px var(--accent-light);
+    height: 24px;
+    width: 2px;
+    background: var(--text);
+}
+
+.timeline-node.before-selected {
+    background: var(--text);
 }
 
 .timeline-date-label {
@@ -2857,8 +2882,7 @@ button:focus-visible, .button:focus-visible {
     }
 
     .timeline-node {
-        width: 14px;
-        height: 14px;
+        height: 18px;
     }
 }
 
@@ -3351,6 +3375,7 @@ button:focus-visible, .button:focus-visible {
     background: transparent;
     border: none;
     border-bottom: 2px solid transparent;
+    border-radius: 0;
     padding: 0.5rem 1rem;
     font-family: var(--font-grotesk);
     font-size: 0.75rem;

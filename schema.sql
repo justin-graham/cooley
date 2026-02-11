@@ -32,13 +32,32 @@ COMMENT ON TABLE access_requests IS 'Email addresses requesting platform access'
 
 
 -- ============================================================================
+-- SESSIONS TABLE (durable session auth)
+-- ============================================================================
+
+CREATE TABLE IF NOT EXISTS sessions (
+    session_token TEXT PRIMARY KEY,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    csrf_token TEXT NOT NULL,
+    expires_at TIMESTAMP NOT NULL,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+COMMENT ON TABLE sessions IS 'Durable cookie sessions with CSRF token and expiration';
+
+
+-- ============================================================================
 -- AUDITS TABLE (main audit records)
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS audits (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     created_at TIMESTAMP DEFAULT NOW(),
-    status TEXT NOT NULL CHECK (status IN ('processing', 'complete', 'error')),
+    status TEXT NOT NULL CHECK (status IN ('queued', 'parsing', 'classifying', 'extracting', 'reconciling', 'needs_review', 'complete', 'error')),
+    pipeline_state TEXT NOT NULL DEFAULT 'queued' CHECK (pipeline_state IN ('queued', 'parsing', 'classifying', 'extracting', 'reconciling', 'needs_review', 'complete', 'error')),
     progress TEXT,  -- Current processing step for real-time updates
 
     -- Ownership
@@ -51,6 +70,8 @@ CREATE TABLE IF NOT EXISTS audits (
     timeline JSONB,   -- Array of {date, event_type, description, source_docs}
     cap_table JSONB,  -- Array of {shareholder, shares, share_class, ownership_pct}
     issues JSONB,     -- Array of {severity, category, description}
+    quality_report JSONB DEFAULT '{}'::jsonb,  -- Structured extraction/reconciliation quality metadata
+    review_required BOOLEAN DEFAULT FALSE,  -- True if manual legal review is required before relying on outputs
 
     -- Error tracking
     error_message TEXT,
@@ -59,6 +80,8 @@ CREATE TABLE IF NOT EXISTS audits (
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_audits_status ON audits(status);
+CREATE INDEX IF NOT EXISTS idx_audits_pipeline_state ON audits(pipeline_state);
+CREATE INDEX IF NOT EXISTS idx_audits_review_required ON audits(review_required);
 CREATE INDEX IF NOT EXISTS idx_audits_created_at ON audits(created_at DESC);
 
 -- Optional: Add a comment to document the table

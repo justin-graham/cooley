@@ -565,6 +565,16 @@ Recommended Resolution:
 
 # Helper functions
 
+def _get_extraction_payload(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Support both legacy extracted_data shape and versioned envelope shape.
+    """
+    extracted_data = doc.get('extracted_data', {})
+    if isinstance(extracted_data, dict) and isinstance(extracted_data.get('extraction'), dict):
+        return extracted_data.get('extraction', {})
+    return extracted_data if isinstance(extracted_data, dict) else {}
+
+
 def _find_paragraph_reference(audit: Dict[str, Any], event: Dict[str, Any]) -> int:
     """
     Find paragraph number for an event by looking up extracted data.
@@ -587,7 +597,7 @@ def _find_paragraph_reference(audit: Dict[str, Any], event: Dict[str, Any]) -> i
         # Find matching document
         for doc in documents:
             if doc.get('filename') == source_filename:
-                extracted_data = doc.get('extracted_data', {})
+                extracted_data = _get_extraction_payload(doc)
 
                 # Check for paragraph_number in various extraction types
                 if 'stock_issuances' in extracted_data:
@@ -639,7 +649,7 @@ def _find_source_quote(audit: Dict[str, Any], event: Dict[str, Any]) -> str:
         # Find matching document
         for doc in documents:
             if doc.get('filename') == source_filename:
-                extracted_data = doc.get('extracted_data', {})
+                extracted_data = _get_extraction_payload(doc)
 
                 # Check for source_quote in various extraction types
                 if 'stock_issuances' in extracted_data:

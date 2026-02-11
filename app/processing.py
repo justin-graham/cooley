@@ -12,8 +12,9 @@ import logging
 import time
 from datetime import date, datetime
 from decimal import Decimal
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional, Tuple
 from anthropic import Anthropic, APITimeoutError, APIError, RateLimitError
+from pydantic import BaseModel, Field, ValidationError
 from app import db, prompts
 
 logger = logging.getLogger(__name__)
@@ -107,6 +108,263 @@ def clean_document_dict(doc: Dict[str, Any]) -> Dict[str, Any]:
 
 # Initialize Claude client with 60 second timeout
 client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"), timeout=60.0)
+
+
+class ExtractedDataEnvelope(BaseModel):
+    """Versioned schema for persisted documents.extracted_data payloads."""
+    schema_version: str = "v1"
+    category: str
+    parse_status: str
+    parse_error: Optional[str] = None
+    extraction: Dict[str, Any] = Field(default_factory=dict)
+    warnings: List[str] = Field(default_factory=list)
+
+
+class IssueRecord(BaseModel):
+    """Normalized issue object schema persisted in audits.issues."""
+    severity: str
+    category: str
+    description: str
+    source_doc: Optional[str] = None
+
+
+def _normalize_compliance_status(value: Any, fallback: str = "WARNING") -> str:
+    """
+    Normalize event compliance statuses to DB-accepted enum values.
+    """
+    normalized = str(value or "").strip().upper()
+    if normalized in {"VERIFIED", "WARNING", "CRITICAL"}:
+        return normalized
+    return fallback
+
+
+def _severity_key(value: Any) -> str:
+    sev = (value or "note").strip().lower()
+    if sev in {"critical", "warning", "info", "note"}:
+        return sev
+    return "warning"
+
+
+def normalize_issue(issue: Any) -> Dict[str, Any]:
+    """
+    Normalize issue shape for stable downstream rendering.
+    """
+    if isinstance(issue, str):
+        normalized = {
+            "severity": "note",
+            "category": "General",
+            "description": issue
+        }
+    elif isinstance(issue, dict):
+        normalized = {
+            "severity": _severity_key(issue.get("severity")),
+            "category": str(issue.get("category") or "General"),
+            "description": str(issue.get("description") or issue.get("message") or "Unspecified issue")
+        }
+        if issue.get("source_doc"):
+            normalized["source_doc"] = str(issue.get("source_doc"))
+    else:
+        normalized = {
+            "severity": "warning",
+            "category": "System Error",
+            "description": f"Unsupported issue payload: {type(issue).__name__}"
+        }
+
+    # Validate and return stable schema
+    try:
+        return IssueRecord(**normalized).model_dump(exclude_none=True)
+    except ValidationError:
+        return {
+            "severity": "warning",
+            "category": "System Error",
+            "description": "Issue normalization failed"
+        }
+
+
+def _extract_doc_payload(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Build the extracted_data payload for one document with a stable schema.
+    """
+    metadata_keys = {
+        "id",
+        "document_id",
+        "filename",
+        "type",
+        "text",
+        "error",
+        "category",
+        "summary",
+        "pdf_path",
+        "text_spans",
+        "parse_status",
+        "parse_error",
+        "preview_image",
+        "preview_focus_y",
+    }
+    extraction = {k: v for k, v in doc.items() if k not in metadata_keys}
+    warnings = []
+    if doc.get("error"):
+        warnings.append(str(doc.get("error")))
+    if doc.get("parse_error") and doc.get("parse_error") not in warnings:
+        warnings.append(str(doc.get("parse_error")))
+
+    envelope = ExtractedDataEnvelope(
+        category=doc.get("category", "Other"),
+        parse_status=doc.get("parse_status", "success"),
+        parse_error=doc.get("parse_error"),
+        extraction=extraction,
+        warnings=warnings
+    )
+    return envelope.model_dump(exclude_none=True)
+
+
+def _build_enriched_documents(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Build persisted document objects for audits.documents and documents table.
+    """
+    enriched_docs = []
+    for doc in extractions:
+        enriched = {
+            "id": doc.get("id"),
+            "filename": doc.get("filename"),
+            "type": doc.get("type"),
+            "category": doc.get("category", "Other"),
+            "summary": doc.get("summary"),
+            "text": doc.get("text", ""),
+            "error": doc.get("error"),
+            "parse_status": doc.get("parse_status", "error" if doc.get("error") else "success"),
+            "parse_error": doc.get("parse_error") or doc.get("error"),
+            "extracted_data": _extract_doc_payload(doc),
+        }
+        if doc.get("document_id"):
+            enriched["document_id"] = doc.get("document_id")
+        enriched_docs.append(enriched)
+    return enriched_docs
+
+
+def _scan_low_confidence(doc: Dict[str, Any]) -> List[str]:
+    """
+    Collect low-confidence warnings from nested extraction payloads.
+    """
+    warnings = []
+    extracted = doc.get("extracted_data", {}).get("extraction", {})
+    if not isinstance(extracted, dict):
+        return warnings
+
+    for value in extracted.values():
+        if isinstance(value, dict):
+            if value.get("low_confidence"):
+                warnings.append(value.get("confidence_warning") or "Low confidence extraction")
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and item.get("low_confidence"):
+                    warnings.append(item.get("confidence_warning") or "Low confidence extraction")
+    return warnings
+
+
+def _scan_extraction_errors(doc: Dict[str, Any]) -> List[str]:
+    """
+    Collect extraction failures from nested payloads.
+    """
+    failures = []
+    extracted = doc.get("extracted_data", {}).get("extraction", {})
+    if not isinstance(extracted, dict):
+        return failures
+
+    for key, value in extracted.items():
+        if isinstance(value, dict) and value.get("error"):
+            failures.append(f"{key}: {value.get('error')}")
+        elif isinstance(value, list):
+            for item in value:
+                if isinstance(item, dict) and item.get("error"):
+                    failures.append(f"{key}: {item.get('error')}")
+    return failures
+
+
+def build_quality_report(
+    documents: List[Dict[str, Any]],
+    transactions: List[Dict[str, Any]],
+    issues: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """
+    Build auditable quality report and decide if manual review is required.
+    """
+    report = {
+        "schema_version": "v1",
+        "document_count": len(documents),
+        "parsed_successfully": 0,
+        "parse_failures": 0,
+        "extraction_failures": 0,
+        "low_confidence_count": 0,
+        "missing_approvals": 0,
+        "critical_compliance_event_count": 0,
+        "critical_issue_count": 0,
+        "blocking_reasons": [],
+        "warnings": []
+    }
+
+    for doc in documents:
+        if doc.get("parse_status") in {"success", "partial"}:
+            report["parsed_successfully"] += 1
+        else:
+            report["parse_failures"] += 1
+            report["blocking_reasons"].append(
+                f"Document parsing failed: {doc.get('filename', 'unknown')}"
+            )
+
+        low_confidence_warnings = _scan_low_confidence(doc)
+        if low_confidence_warnings:
+            report["low_confidence_count"] += len(low_confidence_warnings)
+            report["warnings"].extend(low_confidence_warnings)
+            report["blocking_reasons"].append(
+                f"Low-confidence extraction requires review: {doc.get('filename', 'unknown')}"
+            )
+
+        extraction_failures = _scan_extraction_errors(doc)
+        if extraction_failures:
+            report["extraction_failures"] += len(extraction_failures)
+            report["warnings"].extend(extraction_failures)
+            report["blocking_reasons"].append(
+                f"Extraction failed for one or more required fields: {doc.get('filename', 'unknown')}"
+            )
+
+    for tx in transactions:
+        tx_type = (tx.get("event_type") or "").lower()
+        requires_approval = tx_type in {"issuance", "repurchase", "option_grant"}
+        missing_approval = requires_approval and not tx.get("approval_doc_id")
+        if missing_approval:
+            report["missing_approvals"] += 1
+            report["blocking_reasons"].append(
+                f"Missing approval evidence for {tx.get('event_type')} event on {tx.get('event_date')}"
+            )
+
+        summary = str(tx.get("summary") or "").strip().lower()
+        if summary and any(token in summary for token in ["n/a", "none", "unknown", "null"]):
+            report["blocking_reasons"].append(
+                f"Unresolved summary placeholders found for event on {tx.get('event_date')}"
+            )
+
+        compliance_status = _normalize_compliance_status(tx.get("compliance_status"), fallback="WARNING")
+        if compliance_status == "CRITICAL":
+            report["critical_compliance_event_count"] += 1
+            report["blocking_reasons"].append(
+                f"Critical compliance gap for {tx.get('event_type')} event on {tx.get('event_date')}"
+            )
+
+    normalized_issues = [normalize_issue(issue) for issue in issues]
+    report["critical_issue_count"] = sum(
+        1 for issue in normalized_issues if issue.get("severity") == "critical"
+    )
+    if report["critical_issue_count"] > 0:
+        report["blocking_reasons"].append(
+            f"{report['critical_issue_count']} critical compliance issue(s) detected"
+        )
+
+    # Deduplicate while preserving order
+    report["warnings"] = list(dict.fromkeys(report["warnings"]))
+    report["blocking_reasons"] = list(dict.fromkeys(report["blocking_reasons"]))
+    report["review_required"] = bool(report["blocking_reasons"])
+    return report
 
 
 # ============================================================================
@@ -364,16 +622,10 @@ def parse_json_response(response_text: str) -> Any:
         except json.JSONDecodeError:
             pass
 
-        # Attempt 3: Extract valid JSON prefix (for truncated responses)
-        try:
-            decoder = json.JSONDecoder()
-            result, idx = decoder.raw_decode(text)
-            logger.warning(f"Recovered partial JSON: parsed {idx}/{len(text)} characters")
-            return result
-        except json.JSONDecodeError:
-            pass
-
         # Log failure details and re-raise
+        # NOTE: We intentionally do NOT use raw_decode() to accept truncated JSON.
+        # For a legal compliance tool, partial extraction data is worse than no data.
+        # The calling extraction functions handle failures gracefully with try/except.
         logger.error(f"JSON repair failed. Error: {e}")
         logger.error(f"Problematic section: {text[max(0, e.pos-50):e.pos+50]}")
         raise
@@ -545,6 +797,8 @@ def extract_charter_data(doc: Dict[str, Any]) -> Dict[str, Any]:
 
         if verification['confidence_score'] < 70:
             logger.warning(f"Low confidence charter extraction ({verification['confidence_score']}%) for {doc['filename']}: {verification.get('warnings')}")
+            result['low_confidence'] = True
+            result['confidence_warning'] = f"Low confidence extraction ({verification['confidence_score']}%) for {doc['filename']}. Manual review recommended."
 
         return result
     except Exception as e:
@@ -570,6 +824,8 @@ def extract_stock_data(doc: Dict[str, Any]) -> List[Dict[str, Any]]:
 
             if verification['confidence_score'] < 70:
                 logger.warning(f"Low confidence stock extraction ({verification['confidence_score']}%) for {doc['filename']}: {verification.get('warnings')}")
+                issuance['low_confidence'] = True
+                issuance['confidence_warning'] = f"Low confidence extraction ({verification['confidence_score']}%) for {doc['filename']}. Manual review recommended."
 
         return issuances
     except Exception as e:
@@ -594,6 +850,8 @@ def extract_safe_data(doc: Dict[str, Any]) -> Dict[str, Any]:
 
         if verification['confidence_score'] < 70:
             logger.warning(f"Low confidence SAFE extraction ({verification['confidence_score']}%) for {doc['filename']}: {verification.get('warnings')}")
+            result['low_confidence'] = True
+            result['confidence_warning'] = f"Low confidence extraction ({verification['confidence_score']}%) for {doc['filename']}. Manual review recommended."
 
         return result
     except Exception as e:
@@ -616,6 +874,8 @@ def extract_convertible_note_data(doc: Dict[str, Any]) -> Dict[str, Any]:
 
         if verification['confidence_score'] < 70:
             logger.warning(f"Low confidence convertible note extraction ({verification['confidence_score']}%) for {doc['filename']}: {verification.get('warnings')}")
+            result['low_confidence'] = True
+            result['confidence_warning'] = f"Low confidence extraction ({verification['confidence_score']}%) for {doc['filename']}. Manual review recommended."
 
         return result
     except Exception as e:
@@ -1030,20 +1290,20 @@ def generate_event_summary(extracted_data: Dict[str, Any], event_type: str) -> s
     Returns:
         Condensed summary string
     """
-    shareholder = extracted_data.get('shareholder') or extracted_data.get('recipient') or extracted_data.get('investor')
+    shareholder = extracted_data.get('shareholder') or extracted_data.get('recipient') or extracted_data.get('investor') or 'Unknown party'
     shares = extracted_data.get('shares') or extracted_data.get('shares_issued')
     share_class = extracted_data.get('share_type') or extracted_data.get('share_class') or 'Common'
     price = extracted_data.get('price_per_share')
-    date = extracted_data.get('date') or extracted_data.get('issuance_date') or extracted_data.get('grant_date')
+    date = extracted_data.get('date') or extracted_data.get('issuance_date') or extracted_data.get('grant_date') or 'Unknown date'
 
     # Use absolute value for display when dealing with negative deltas (e.g., repurchases)
     display_shares = abs(shares) if isinstance(shares, (int, float)) and event_type == 'repurchase' else shares
 
     # Format shares with commas
-    shares_str = f"{int(display_shares):,}" if display_shares else "N/A"
+    shares_str = f"{int(display_shares):,}" if display_shares else "unspecified"
 
     # Format price
-    price_str = f"${price:.4f}" if price else "N/A"
+    price_str = f"${price:.4f}" if price else "unspecified price"
 
     # Build summary based on event type
     if event_type == 'stock_issuance':
@@ -1052,7 +1312,7 @@ def generate_event_summary(extracted_data: Dict[str, Any], event_type: str) -> s
         return f"{shareholder} granted {shares_str} {share_class} options at {price_str} strike price on {date}"
     elif event_type == 'safe':
         amount = extracted_data.get('amount') or extracted_data.get('investment_amount')
-        amount_str = f"${amount:,}" if amount else "N/A"
+        amount_str = f"${amount:,}" if amount else "unspecified amount"
         return f"{shareholder} invested {amount_str} via SAFE on {date}"
     elif event_type == 'repurchase':
         return f"Company repurchased {shares_str} {share_class} shares from {shareholder} on {date}"
@@ -1216,18 +1476,21 @@ def synthesize_timeline(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any
         return programmatic_timeline
 
 
-def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def build_raw_cap_table(equity_data: List[Dict[str, Any]], issues: List[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
     """
     Build a basic cap table from raw equity data without AI synthesis.
-    Uses share class normalization for consistency.
+    Uses share class normalization and Decimal arithmetic for precision.
 
     Args:
         equity_data: List of equity issuances
+        issues: Optional list to append data integrity issues to
 
     Returns:
         List of cap table entries with calculated ownership percentages
     """
-    # Aggregate by shareholder and normalized share class
+    from decimal import ROUND_HALF_UP
+
+    # Aggregate by shareholder and normalized share class using Decimal for precision
     aggregated = {}
     for item in equity_data:
         shareholder = item.get('shareholder') or item.get('investor') or item.get('recipient') or 'Unknown'
@@ -1239,25 +1502,51 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
 
         key = (shareholder, share_class)
         if key not in aggregated:
-            aggregated[key] = 0.0  # Initialize as float
+            aggregated[key] = Decimal('0')
 
-        # Add shares (handles positive issuances)
+        # Add shares using Decimal for precision
         if isinstance(shares, (int, float, Decimal)):
-            aggregated[key] += float(shares)  # Convert to float
+            aggregated[key] += Decimal(str(shares))
 
-    # Remove entries with 0 or negative shares
-    aggregated = {k: v for k, v in aggregated.items() if v > 0}
+    # Separate positions by sign and flag data integrity issues
+    negative_positions = {k: v for k, v in aggregated.items() if v < 0}
+    zero_positions = {k: v for k, v in aggregated.items() if v == 0}
+    positive_positions = {k: v for k, v in aggregated.items() if v > 0}
 
-    # Calculate total shares for ownership percentage
-    total_shares = float(sum(aggregated.values()))
+    # Log and flag fully-repurchased shareholders (net zero)
+    for (shareholder, share_class), _ in zero_positions.items():
+        logger.info(f"Full repurchase: {shareholder} ({share_class}) has 0 net shares")
+        if issues is not None:
+            issues.append({
+                'severity': 'info',
+                'category': 'Cap Table',
+                'description': f"{shareholder} has 0 net shares ({share_class}) after repurchase. Shareholder fully exited."
+            })
+
+    # Flag negative positions as data integrity errors
+    for (shareholder, share_class), shares in negative_positions.items():
+        logger.error(f"Data integrity: {shareholder} ({share_class}) has {shares} net shares (negative)")
+        if issues is not None:
+            issues.append({
+                'severity': 'critical',
+                'category': 'Data Integrity',
+                'description': f"{shareholder} has {shares} net shares ({share_class}). More shares repurchased than issued — possible missing issuance document."
+            })
+
+    # Only include positive positions in cap table
+    aggregated = positive_positions
+
+    # Calculate total shares for ownership percentage using Decimal
+    total_shares = sum(aggregated.values())
 
     # Convert to cap table format with ownership %
+    TWO_PLACES = Decimal('0.01')
     cap_table = [
         {
             'shareholder': shareholder,
-            'shares': float(shares),  # Ensure float
+            'shares': float(shares),
             'share_class': share_class,
-            'ownership_pct': round((float(shares) / total_shares * 100), 2) if total_shares > 0 else 0.0
+            'ownership_pct': float((shares / total_shares * 100).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)) if total_shares > 0 else 0.0
         }
         for (shareholder, share_class), shares in aggregated.items()
     ]
@@ -1266,9 +1555,8 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
     cap_table.sort(key=lambda x: x['ownership_pct'], reverse=True)
 
     # Adjust largest shareholder to ensure total = exactly 100.00%
-    # (Applying rounding error to the largest entry minimizes distortion)
     if cap_table:
-        calculated_total = float(sum(entry['ownership_pct'] for entry in cap_table))
+        calculated_total = sum(entry['ownership_pct'] for entry in cap_table)
         if calculated_total != 100.0:
             adjustment = round(100.0 - calculated_total, 2)
             cap_table[0]['ownership_pct'] = round(cap_table[0]['ownership_pct'] + adjustment, 2)
@@ -1277,7 +1565,7 @@ def build_raw_cap_table(equity_data: List[Dict[str, Any]]) -> List[Dict[str, Any
     return cap_table
 
 
-def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def synthesize_cap_table(extractions: List[Dict[str, Any]]):
     """
     Generate a cap table from equity issuance data.
     Uses programmatic (code-based) aggregation as primary method.
@@ -1286,7 +1574,8 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
         extractions: List of documents with extracted data
 
     Returns:
-        List of cap table entries with ownership percentages
+        Tuple of (cap_table, issues) where cap_table is a list of entries
+        and issues is a list of data integrity issues found during calculation
     """
     # Collect all equity-related extractions
     equity_data = []
@@ -1353,16 +1642,17 @@ def synthesize_cap_table(extractions: List[Dict[str, Any]]) -> List[Dict[str, An
                     logger.info(f"Added repurchase: {shareholder} -{float(abs(shares))} shares")
 
     if not equity_data:
-        return []
+        return [], []
+
+    # Collect data integrity issues from cap table calculation
+    cap_table_issues = []
 
     # Build cap table programmatically (deterministic, no math errors)
-    programmatic_cap_table = build_raw_cap_table(equity_data)
-    logger.info(f"Built cap table programmatically: {len(programmatic_cap_table)} entries")
+    programmatic_cap_table = build_raw_cap_table(equity_data, issues=cap_table_issues)
+    logger.info(f"Built cap table programmatically: {len(programmatic_cap_table)} entries, {len(cap_table_issues)} issues")
 
-    # Return programmatic cap table (100% accurate, no AI needed for arithmetic)
-    # AI was previously used to aggregate and calculate percentages, but this is
-    # better done with code (guaranteed correctness, faster, free)
-    return programmatic_cap_table
+    # Return programmatic cap table and any data integrity issues found
+    return programmatic_cap_table, cap_table_issues
 
 
 def check_deterministic_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, Any]], timeline: List[Dict[str, Any]], extractions: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -1621,6 +1911,31 @@ def check_deterministic_issues(documents: List[Dict[str, Any]], cap_table: List[
                 'description': f"Board minutes reference '{decision[:80]}...' but no {doc_type} document found. Document may be missing from the upload."
             })
 
+    # LOW CONFIDENCE EXTRACTIONS: Flag for manual review
+    for ext in extractions:
+        # Inspect all nested extracted payloads
+        for key, value in ext.items():
+            if isinstance(value, dict) and value.get('low_confidence'):
+                issues.append({
+                    'severity': 'warning',
+                    'category': 'Extraction Quality',
+                    'description': value.get(
+                        'confidence_warning',
+                        f"Low confidence extraction for {ext.get('filename', 'unknown document')}. Manual review recommended."
+                    )
+                })
+            elif isinstance(value, list):
+                for item in value:
+                    if isinstance(item, dict) and item.get('low_confidence'):
+                        issues.append({
+                            'severity': 'warning',
+                            'category': 'Extraction Quality',
+                            'description': item.get(
+                                'confidence_warning',
+                                f"Low confidence extraction for {ext.get('filename', 'unknown document')}. Manual review recommended."
+                            )
+                        })
+
     logger.info(f"Deterministic checks found {len(issues)} issues")
     return issues
 
@@ -1666,7 +1981,7 @@ def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, A
         ai_issues = parse_json_response(response)
 
         # Combine deterministic (high confidence) with AI analysis (nuanced insights)
-        all_issues = deterministic_issues + ai_issues
+        all_issues = [normalize_issue(issue) for issue in (deterministic_issues + ai_issues)]
         logger.info(f"Total issues: {len(all_issues)} ({len(deterministic_issues)} deterministic, {len(ai_issues)} AI-detected)")
 
         return all_issues
@@ -1674,12 +1989,15 @@ def generate_issues(documents: List[Dict[str, Any]], cap_table: List[Dict[str, A
     except RateLimitError as e:
         logger.warning(f"Issue generation rate limited, returning deterministic issues only: {e}")
         print(f"WARNING: AI issue analysis rate limited - showing {len(deterministic_issues)} deterministic issues")
-        return deterministic_issues  # Return deterministic issues instead of empty/error
+        return [normalize_issue(issue) for issue in deterministic_issues]  # Return deterministic issues instead of empty/error
     except Exception as e:
         logger.error(f"AI issue generation failed: {e}", exc_info=True)
         print(f"ERROR: AI issue analysis failed - showing {len(deterministic_issues)} deterministic issues: {e}")
         # Return deterministic issues even if AI fails
-        return deterministic_issues if deterministic_issues else [{'severity': 'critical', 'category': 'System Error', 'description': f'Issue analysis failed: {str(e)}'}]
+        fallback = deterministic_issues if deterministic_issues else [
+            {'severity': 'critical', 'category': 'System Error', 'description': f'Issue analysis failed: {str(e)}'}
+        ]
+        return [normalize_issue(issue) for issue in fallback]
 
 
 def extract_company_name(extractions: List[Dict[str, Any]]) -> str:
@@ -1915,6 +2233,24 @@ def match_approvals_batch(transactions: List[Dict[str, Any]], classified_docs: L
     if not transactions:
         return transactions
 
+    approval_required_types = {"issuance", "repurchase", "option_grant"}
+
+    # Set conservative defaults before AI matching so unmatched rows never fail open.
+    for tx in transactions:
+        tx_type = (tx.get("event_type") or "").lower()
+        tx["approval_doc_id"] = None
+        tx["approval_snippet"] = None
+
+        if tx_type in approval_required_types:
+            tx["compliance_status"] = "WARNING"
+            tx["compliance_note"] = "Approval evidence not matched automatically. Manual review required."
+        elif tx_type == "formation":
+            tx["compliance_status"] = "VERIFIED"
+            tx["compliance_note"] = "Formation evidence sourced from charter document."
+        else:
+            tx["compliance_status"] = "WARNING"
+            tx["compliance_note"] = "Approval linkage not required but evidence should be reviewed."
+
     # Filter to approval documents only
     approval_docs = [
         d for d in classified_docs
@@ -1922,13 +2258,19 @@ def match_approvals_batch(transactions: List[Dict[str, Any]], classified_docs: L
     ]
 
     if not approval_docs:
-        # No approval documents found - mark all as CRITICAL
-        logger.warning("No approval documents found - marking all transactions as CRITICAL")
+        # No approval documents found - mark approval-required tx as CRITICAL.
+        logger.warning("No approval documents found - marking approval-required transactions as CRITICAL")
         for tx in transactions:
-            tx['approval_doc_id'] = None
-            tx['approval_snippet'] = None
-            tx['compliance_status'] = 'CRITICAL'
-            tx['compliance_note'] = 'No board approval documents found in document set'
+            tx_type = (tx.get("event_type") or "").lower()
+            if tx_type in approval_required_types:
+                tx['compliance_status'] = 'CRITICAL'
+                tx['compliance_note'] = 'No board approval documents found in document set'
+            elif tx_type == "formation":
+                tx['compliance_status'] = 'VERIFIED'
+                tx['compliance_note'] = 'Formation evidence sourced from charter document'
+            else:
+                tx['compliance_status'] = 'WARNING'
+                tx['compliance_note'] = 'No approval documents found to validate this financing event'
         return transactions
 
     # Build manifest for Claude (lightweight, just metadata + excerpt)
@@ -1995,7 +2337,13 @@ def match_approvals_batch(transactions: List[Dict[str, Any]], classified_docs: L
                 else:
                     transactions[tx_idx]['approval_doc_id'] = returned_id
                     transactions[tx_idx]['approval_snippet'] = match.get('approval_quote')
-                    transactions[tx_idx]['compliance_status'] = match.get('compliance_status', 'VERIFIED')
+                    fallback_status = "WARNING"
+                    if (transactions[tx_idx].get('event_type') or '').lower() == 'formation':
+                        fallback_status = "VERIFIED"
+                    transactions[tx_idx]['compliance_status'] = _normalize_compliance_status(
+                        match.get('compliance_status'),
+                        fallback=fallback_status
+                    )
                     transactions[tx_idx]['compliance_note'] = match.get('compliance_note')
 
         logger.info(f"Batch approval matching complete: {len(matches)} matches processed")
@@ -2003,11 +2351,8 @@ def match_approvals_batch(transactions: List[Dict[str, Any]], classified_docs: L
 
     except Exception as e:
         logger.error(f"Batch approval matching failed: {e}", exc_info=True)
-        # Fallback: Mark all as PENDING if matching fails
+        # Fallback defaults already applied above.
         for tx in transactions:
-            tx['approval_doc_id'] = None
-            tx['approval_snippet'] = None
-            tx['compliance_status'] = 'WARNING'
             tx['compliance_note'] = f'Approval matching failed: {str(e)}'
         return transactions
 
@@ -2026,11 +2371,12 @@ def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
     """
     try:
         total_docs = len(documents)
+        transactions: List[Dict[str, Any]] = []
         logger.info(f"Starting 3-pass processing for {total_docs} documents")
 
         # ========== PASS 1: CLASSIFICATION ==========
         try:
-            db.update_progress(audit_id, "Pass 1: Classifying documents...")
+            db.update_progress(audit_id, "Pass 1: Classifying documents...", pipeline_state='classifying')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
             print(f"ERROR: Failed to update progress: {e}")
@@ -2038,78 +2384,91 @@ def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
         classified_docs = []
         for i, doc in enumerate(documents, start=1):
             try:
-                db.update_progress(audit_id, f"Pass 1: Classifying documents... {i}/{total_docs}")
+                db.update_progress(
+                    audit_id,
+                    f"Pass 1: Classifying documents... {i}/{total_docs}",
+                    pipeline_state='classifying'
+                )
             except Exception as e:
                 logger.error(f"Failed to update progress: {e}")
 
-            # Log which document is being classified
             logger.info(f"Classifying document {i}/{total_docs}: {doc.get('filename', 'unknown')}")
-
             classified_doc = classify_document(doc)
+            classified_doc['parse_status'] = doc.get('parse_status', 'error' if doc.get('error') else 'success')
+            classified_doc['parse_error'] = doc.get('parse_error') or doc.get('error')
             classified_docs.append(classified_doc)
 
         logger.info(f"Pass 1 complete: Classified {total_docs} documents")
 
         # ========== PASS 2: EXTRACTION ==========
         try:
-            db.update_progress(audit_id, "Pass 2: Extracting structured data...")
+            db.update_progress(audit_id, "Pass 2: Extracting structured data...", pipeline_state='extracting')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
             print(f"ERROR: Failed to update progress: {e}")
 
-        # Insert documents into documents table first (for tie-out feature)
-        for doc in classified_docs:
-            try:
-                doc_id = db.insert_document(
-                    audit_id=audit_id,
-                    filename=doc.get('filename', 'unknown'),
-                    classification=doc.get('category'),
-                    extracted_data=None,  # Will update after extraction
-                    full_text=doc.get('text')
-                )
-                doc['document_id'] = doc_id  # Store for reference
-            except Exception as e:
-                logger.warning(f"Failed to insert document {doc.get('filename')}: {e}")
-
         extractions = []
         for i, doc in enumerate(classified_docs, start=1):
-            if doc.get('error'):
-                extractions.append(doc)
-                continue
-
             try:
-                db.update_progress(audit_id, f"Pass 2: Extracting data... {i}/{total_docs}")
+                db.update_progress(
+                    audit_id,
+                    f"Pass 2: Extracting data... {i}/{total_docs}",
+                    pipeline_state='extracting'
+                )
             except Exception as e:
                 logger.error(f"Failed to update progress: {e}")
+
+            if doc.get('error') or doc.get('parse_status') == 'error':
+                extractions.append(doc)
+                continue
 
             extracted_data = extract_by_type(doc)
             extractions.append({**doc, **extracted_data})
 
         logger.info(f"Pass 2 complete: Extracted data from {total_docs} documents")
 
+        # Build versioned extracted_data payloads for each persisted document.
+        enriched_docs = _build_enriched_documents(extractions)
+
+        # Persist normalized documents first so transaction records can reference document IDs.
+        try:
+            db.update_progress(audit_id, "Pass 2: Saving normalized documents...", pipeline_state='extracting')
+            doc_ids = db.insert_documents_and_events(audit_id, enriched_docs, [])
+            for doc in extractions:
+                doc_key = str(doc.get('id') or doc.get('filename') or 'unknown')
+                if doc_key in doc_ids:
+                    doc['document_id'] = doc_ids[doc_key]
+            for doc in enriched_docs:
+                doc_key = str(doc.get('id') or doc.get('filename') or 'unknown')
+                if doc_key in doc_ids:
+                    doc['document_id'] = doc_ids[doc_key]
+            logger.info(f"Inserted {len(enriched_docs)} documents")
+        except Exception as e:
+            logger.error(f"Failed to insert normalized documents: {e}", exc_info=True)
+            raise
+
         # ========== PASS 2 TIE-OUT: Transaction Extraction & Approval Matching ==========
         try:
-            db.update_progress(audit_id, "Pass 2: Matching transactions with approvals...")
+            db.update_progress(audit_id, "Pass 2: Matching transactions with approvals...", pipeline_state='reconciling')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
-        # Extract equity transactions from extracted data
         transactions = extract_equity_transactions(extractions)
 
-        # Match transactions with approval documents (single batched Claude call)
         if transactions:
-            transactions = match_approvals_batch(transactions, classified_docs)
+            transactions = match_approvals_batch(transactions, extractions)
 
-            # Insert equity events into database
-            try:
-                db.insert_equity_events(audit_id, transactions)
-                logger.info(f"Inserted {len(transactions)} equity events into database")
-            except Exception as e:
-                logger.error(f"Failed to insert equity events: {e}", exc_info=True)
+            # Enforce stable schema for equity_events.details payloads.
+            for tx in transactions:
+                details = tx.get('details') if isinstance(tx.get('details'), dict) else {}
+                tx['details'] = {'schema_version': 'v1', **details}
+
+            db.insert_equity_events(audit_id, transactions)
+            logger.info(f"Inserted {len(transactions)} equity events")
 
         # ========== PASS 3: SYNTHESIS ==========
         try:
-            db.update_progress(audit_id, "Pass 3: Synthesizing timeline...")
+            db.update_progress(audit_id, "Pass 3: Synthesizing timeline...", pipeline_state='reconciling')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
             print(f"ERROR: Failed to update progress: {e}")
@@ -2117,45 +2476,62 @@ def process_audit(audit_id: str, documents: List[Dict[str, Any]]):
         timeline = synthesize_timeline(extractions)
 
         try:
-            db.update_progress(audit_id, "Pass 3: Synthesizing cap table...")
+            db.update_progress(audit_id, "Pass 3: Synthesizing cap table...", pipeline_state='reconciling')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
-        cap_table = synthesize_cap_table(extractions)
+        cap_table, cap_table_issues = synthesize_cap_table(extractions)
 
         try:
-            db.update_progress(audit_id, "Pass 3: Synthesizing issues...")
+            db.update_progress(audit_id, "Pass 3: Synthesizing issues...", pipeline_state='reconciling')
         except Exception as e:
             logger.error(f"Failed to update progress: {e}")
 
-        issues = generate_issues(classified_docs, cap_table, timeline, extractions)
-
-        try:
-            db.update_progress(audit_id, "Pass 3: Finalizing report...")
-        except Exception as e:
-            logger.error(f"Failed to update progress: {e}")
+        issues = generate_issues(enriched_docs, cap_table, timeline, extractions)
+        issues.extend([normalize_issue(issue) for issue in cap_table_issues])
+        issues = [normalize_issue(issue) for issue in issues]
 
         company_name = extract_company_name(extractions)
-
-        logger.info(f"Pass 3 complete: Generated timeline, cap table, and issues")
+        logger.info("Pass 3 complete: Generated timeline, cap table, and issues")
 
         # ========== SAVE RESULTS ==========
-        failed_docs = [d for d in classified_docs if d.get('error')]
+        failed_docs = [
+            d for d in enriched_docs
+            if d.get('parse_status') == 'error' or d.get('error')
+        ]
 
-        # Clean all document text to remove NULL bytes and control characters
-        cleaned_docs = [clean_document_dict(doc) for doc in classified_docs]
+        cleaned_docs = [clean_document_dict(doc) for doc in enriched_docs]
         cleaned_failed_docs = [clean_document_dict(doc) for doc in failed_docs]
+        quality_report = build_quality_report(cleaned_docs, transactions, issues)
+        review_required = bool(quality_report.get('review_required'))
 
-        db.update_audit_results(audit_id, {
-            'company_name': company_name,
-            'documents': cleaned_docs,
-            'timeline': timeline,
-            'cap_table': cap_table,
-            'issues': issues,
-            'failed_documents': cleaned_failed_docs
-        })
+        try:
+            db.update_progress(
+                audit_id,
+                "Manual review required before finalization." if review_required else "Pass 3: Finalizing report...",
+                pipeline_state='needs_review' if review_required else 'complete'
+            )
+        except Exception as e:
+            logger.error(f"Failed to update progress: {e}")
 
-        logger.info(f"Audit {audit_id} completed successfully")
+        db.update_audit_results(
+            audit_id,
+            {
+                'company_name': company_name,
+                'documents': cleaned_docs,
+                'timeline': timeline,
+                'cap_table': cap_table,
+                'issues': issues,
+                'failed_documents': cleaned_failed_docs
+            },
+            review_required=review_required,
+            quality_report=quality_report
+        )
+
+        logger.info(
+            f"Audit {audit_id} completed with status "
+            f"{'needs_review' if review_required else 'complete'}"
+        )
 
     except Exception as e:
         logger.error(f"Processing error in audit {audit_id}: {e}", exc_info=True)
@@ -2303,26 +2679,33 @@ def _normalize_name(name: str) -> str:
 
 
 def _find_best_match(name: str, candidates) -> str:
-    """Find best matching name from candidates. Returns None if no match."""
+    """
+    Find best matching name from candidates.
+    Conservative matching to avoid false positives in legal tie-outs.
+    """
+    import difflib
+
     if not name:
         return None
     candidates = list(candidates)
+    if not candidates:
+        return None
 
     # Exact match
     if name in candidates:
         return name
 
-    # Substring containment
-    for c in candidates:
-        if name in c or c in name:
-            return c
+    # Fuzzy match only when confidence is high and unambiguous.
+    scored = [
+        (candidate, difflib.SequenceMatcher(None, name, candidate).ratio())
+        for candidate in candidates
+    ]
+    scored.sort(key=lambda item: item[1], reverse=True)
+    best_name, best_score = scored[0]
+    second_score = scored[1][1] if len(scored) > 1 else 0.0
 
-    # Last-name matching
-    name_parts = name.split()
-    for c in candidates:
-        c_parts = c.split()
-        if name_parts and c_parts and name_parts[-1] == c_parts[-1]:
-            return c
+    if best_score >= 0.92 and (best_score - second_score) >= 0.05:
+        return best_name
 
     return None
 
@@ -2337,16 +2720,52 @@ def compare_cap_tables(
     """
     issues = []
 
-    # Build normalized-name lookups
+    # Build normalized-name lookups with aggregation to avoid overwrite on duplicates.
     gen_by_name = {}
+    gen_duplicates = set()
     for entry in generated_cap_table:
         name = _normalize_name(entry.get('shareholder', ''))
-        gen_by_name[name] = entry
+        if not name:
+            continue
+        shares = float(entry.get('shares', 0) or 0)
+        if name in gen_by_name:
+            gen_duplicates.add(name)
+            gen_by_name[name]['shares'] = float(gen_by_name[name].get('shares', 0) or 0) + shares
+        else:
+            gen_by_name[name] = {
+                **entry,
+                'shares': shares
+            }
 
     carta_by_name = {}
+    carta_duplicates = set()
     for entry in carta_shareholders:
         name = _normalize_name(entry.get('name', ''))
-        carta_by_name[name] = entry
+        if not name:
+            continue
+        shares = float(entry.get('shares', 0) or 0)
+        if name in carta_by_name:
+            carta_duplicates.add(name)
+            carta_by_name[name]['shares'] = float(carta_by_name[name].get('shares', 0) or 0) + shares
+        else:
+            carta_by_name[name] = {
+                **entry,
+                'shares': shares
+            }
+
+    for dup_name in sorted(gen_duplicates):
+        issues.append({
+            'severity': 'warning',
+            'category': 'Cap Table Tie-Out',
+            'description': f'Generated cap table has duplicate shareholder entries for "{gen_by_name[dup_name].get("shareholder", dup_name)}". Shares were aggregated before matching.'
+        })
+
+    for dup_name in sorted(carta_duplicates):
+        issues.append({
+            'severity': 'warning',
+            'category': 'Cap Table Tie-Out',
+            'description': f'Carta cap table has duplicate shareholder entries for "{carta_by_name[dup_name].get("name", dup_name)}". Shares were aggregated before matching.'
+        })
 
     matched_gen_names = set()
 
@@ -2422,11 +2841,11 @@ def tieout_carta_captable(audit_id: str, captable_path: str):
 
     if not carta_data['shareholders']:
         logger.warning(f"Could not parse Carta cap table for audit {audit_id}")
-        db.append_issues(audit_id, [{
+        db.append_issues(audit_id, [normalize_issue({
             'severity': 'warning',
             'category': 'Cap Table Tie-Out',
             'description': 'Uploaded cap table could not be parsed. Ensure it is a standard Carta export (.xlsx).'
-        }])
+        })])
         return
 
     # Fetch the generated cap table
@@ -2441,11 +2860,11 @@ def tieout_carta_captable(audit_id: str, captable_path: str):
     issues = compare_cap_tables(carta_data['shareholders'], generated_cap_table)
 
     if issues:
-        db.append_issues(audit_id, issues)
+        db.append_issues(audit_id, [normalize_issue(issue) for issue in issues])
         logger.info(f"Cap table tie-out found {len(issues)} discrepancies for audit {audit_id}")
     else:
-        db.append_issues(audit_id, [{
+        db.append_issues(audit_id, [normalize_issue({
             'severity': 'info',
             'category': 'Cap Table Tie-Out',
             'description': f'Carta cap table matches source documents. All {len(carta_data["shareholders"])} shareholders verified.'
-        }])
+        })])

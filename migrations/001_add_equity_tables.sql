@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS documents (
     classification TEXT,  -- Document type (e.g., 'Stock Purchase Agreement', 'Board Consent')
     extracted_data JSONB,  -- Type-specific structured data from Pass 2
     full_text TEXT,  -- Parsed document text for AI quote extraction
+    parse_status TEXT DEFAULT 'success' CHECK (parse_status IN ('success', 'partial', 'error', 'skipped')),
+    parse_error TEXT,
     created_at TIMESTAMP DEFAULT NOW()
 );
 
@@ -55,6 +57,8 @@ CREATE TABLE IF NOT EXISTS equity_events (
 
     -- Flexible metadata field
     details JSONB,  -- Event-specific data (e.g., {price_per_share: 0.01, valuation_cap: 10000000})
+    preview_image TEXT,  -- Base64-encoded document preview screenshot
+    summary TEXT,  -- Condensed event summary for UI cards
 
     created_at TIMESTAMP DEFAULT NOW()
 );

@@ -8,18 +8,87 @@ let currentAuditId = null;
 let pollInterval = null;
 let isDemoModeActive = false;  // Track if currently in demo mode
 let demoDataCache = null;      // Cache demo data for client-side rendering
+let isUploading = false;       // Guard against double uploads
+let pollRetryCount = 0;        // Retry counter for polling failures
+const MAX_POLL_RETRIES = 5;    // Max retries before showing error
 
 // DOM Elements
 const uploadZone = document.getElementById('upload-zone');
 const fileInput = document.getElementById('file-input');
 const progressSection = document.getElementById('progress');
-const progressStep = document.getElementById('progress-step');
-const progressText = document.getElementById('progress-text');
+let progressStep = document.getElementById('progress-step');
+let progressText = document.getElementById('progress-text');
 const resultsSection = document.getElementById('results');
 const uploadSection = document.getElementById('upload-section');
 const captableUploadZone = document.getElementById('captable-upload-zone');
 const captableFileInput = document.getElementById('captable-file-input');
 let selectedCaptableFile = null;
+
+function refreshProgressRefs() {
+    progressStep = document.getElementById('progress-step');
+    progressText = document.getElementById('progress-text');
+}
+
+function setProgressState(step, text) {
+    refreshProgressRefs();
+    if (progressStep && step != null) progressStep.textContent = step;
+    if (progressText && text != null) progressText.textContent = text;
+}
+
+function getCookie(name) {
+    const encoded = `${name}=`;
+    const parts = document.cookie.split(';');
+    for (const part of parts) {
+        const trimmed = part.trim();
+        if (trimmed.startsWith(encoded)) {
+            return decodeURIComponent(trimmed.substring(encoded.length));
+        }
+    }
+    return null;
+}
+
+function getCsrfHeaders() {
+    const csrf = getCookie('csrf_token');
+    return csrf ? { 'X-CSRF-Token': csrf } : {};
+}
+
+function showUiNotice(message) {
+    const id = 'ui-notice-banner';
+    let banner = document.getElementById(id);
+    if (!banner) {
+        banner = document.createElement('div');
+        banner.id = id;
+        banner.style.position = 'fixed';
+        banner.style.top = '68px';
+        banner.style.left = '50%';
+        banner.style.transform = 'translateX(-50%)';
+        banner.style.padding = '0.75rem 1rem';
+        banner.style.background = '#fef2f2';
+        banner.style.border = '1px solid #fecaca';
+        banner.style.color = '#991b1b';
+        banner.style.fontSize = '0.875rem';
+        banner.style.zIndex = '9999';
+        banner.style.maxWidth = '90vw';
+        banner.style.textAlign = 'center';
+        document.body.appendChild(banner);
+    }
+    banner.textContent = message;
+    banner.style.display = 'block';
+    window.setTimeout(() => {
+        if (banner) banner.style.display = 'none';
+    }, 5000);
+}
+
+function renderProgressError(title, message, actionsHtml) {
+    progressSection.innerHTML = `
+        <div role="alert" style="text-align: center; padding: 2rem;">
+            <p style="font-family: var(--font-grotesk); font-size: var(--text-lg); margin-bottom: 0.5rem;">${escapeHtml(title)}</p>
+            <p style="color: var(--gray-600); margin-bottom: 1.5rem;">${escapeHtml(message)}</p>
+            ${actionsHtml || ''}
+        </div>
+    `;
+    refreshProgressRefs();
+}
 
 // ============================================================================
 // DATA ROOM MAPPING
@@ -115,6 +184,21 @@ function getProgressStep(message) {
     return 'Processing';
 }
 
+function getProgressStepFromState(state) {
+    const normalized = (state || '').toLowerCase();
+    const labels = {
+        queued: 'Queued',
+        parsing: 'Extracting',
+        classifying: 'Classifying',
+        extracting: 'Analyzing',
+        reconciling: 'Reconciling',
+        needs_review: 'Review Required',
+        complete: 'Complete',
+        error: 'Error'
+    };
+    return labels[normalized] || 'Processing';
+}
+
 // ============================================================================
 // DEMO MODE
 // ============================================================================
@@ -127,8 +211,7 @@ async function loadDemoMode() {
         // Show progress section
         uploadSection.style.display = 'none';
         progressSection.style.display = 'flex';
-        progressStep.textContent = 'Loading Demo';
-        progressText.textContent = 'Loading demo audit data...';
+        setProgressState('Loading Demo', 'Loading demo audit data...');
 
         // Fetch demo data
         const response = await fetch('/static/demo-data.json');
@@ -153,7 +236,7 @@ async function loadDemoMode() {
 
     } catch (error) {
         console.error('Demo mode error:', error);
-        progressText.textContent = `Error loading demo: ${error.message}`;
+        setProgressState(null, `Error loading demo: ${error.message}`);
         setTimeout(() => {
             progressSection.style.display = 'none';
             uploadSection.style.display = 'grid';
@@ -326,7 +409,7 @@ uploadZone.addEventListener('drop', (e) => {
 
 function handleCaptableFile(file) {
     if (!file.name.endsWith('.xlsx')) {
-        alert('Please upload a .xlsx file (Carta export)');
+        showUiNotice('Please upload a .xlsx file (Carta export).');
         return;
     }
     selectedCaptableFile = file;
@@ -364,24 +447,29 @@ captableUploadZone.addEventListener('drop', (e) => {
  * Upload file to server and start processing
  */
 async function handleFileUpload(file) {
+    // Prevent double uploads
+    if (isUploading) return;
+
     // Validate file type
     if (!file.name.endsWith('.zip')) {
-        alert('Please upload a .zip file');
+        showUiNotice('Please upload a .zip file.');
         return;
     }
 
     // Validate file size (50MB)
     const maxSize = 50 * 1024 * 1024;
     if (file.size > maxSize) {
-        alert(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 50MB.`);
+        showUiNotice(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 50MB.`);
         return;
     }
+
+    isUploading = true;
+    if (uploadZone) uploadZone.classList.add('uploading');
 
     // Show progress section
     uploadSection.style.display = 'none';
     progressSection.style.display = 'flex';
-    progressStep.textContent = 'Uploading';
-    progressText.textContent = 'Uploading zip file...';
+    setProgressState('Uploading', 'Uploading zip file...');
 
     try {
         // Upload file (and optional cap table)
@@ -393,6 +481,9 @@ async function handleFileUpload(file) {
 
         const response = await fetch('/upload', {
             method: 'POST',
+            headers: {
+                ...getCsrfHeaders()
+            },
             body: formData
         });
 
@@ -409,11 +500,14 @@ async function handleFileUpload(file) {
 
     } catch (error) {
         console.error('Upload error:', error);
-        progressText.textContent = `Error: ${error.message}`;
+        setProgressState(null, `Error: ${error.message}`);
         setTimeout(() => {
             progressSection.style.display = 'none';
             uploadSection.style.display = 'grid';
         }, 3000);
+    } finally {
+        isUploading = false;
+        if (uploadZone) uploadZone.classList.remove('uploading');
     }
 }
 
@@ -425,12 +519,13 @@ async function handleFileUpload(file) {
  * Start polling the status endpoint
  */
 function startPolling() {
+    pollRetryCount = 0;
     pollInterval = setInterval(checkStatus, 2000); // Poll every 2 seconds
     checkStatus(); // Check immediately
 }
 
 /**
- * Check audit status
+ * Check audit status with retry logic for transient network errors
  */
 async function checkStatus() {
     if (!currentAuditId) return;
@@ -442,42 +537,49 @@ async function checkStatus() {
             throw new Error('Failed to fetch status');
         }
 
+        pollRetryCount = 0; // Reset on success
         const data = await response.json();
 
         // Update progress text and step
         if (data.progress) {
-            progressStep.textContent = getProgressStep(data.progress);
-            progressText.textContent = data.progress;
+            const stepLabel = data.pipeline_state
+                ? getProgressStepFromState(data.pipeline_state)
+                : getProgressStep(data.progress);
+            setProgressState(stepLabel, data.progress);
         }
 
         // Handle completion
-        if (data.status === 'complete') {
+        if (data.status === 'complete' || data.status === 'needs_review') {
             clearInterval(pollInterval);
             progressSection.style.display = 'none';
             renderResults(data.results);
+            if (data.review_required) {
+                showUiNotice('Audit completed with review-required flags. Validate highlighted issues before relying on outputs.');
+            }
         }
 
         // Handle error
         if (data.status === 'error') {
             clearInterval(pollInterval);
-            progressSection.innerHTML = `
-                <div role="alert" style="text-align: center; padding: 2rem;">
-                    <p style="font-family: var(--font-grotesk); font-size: var(--text-lg); margin-bottom: 0.5rem;">Processing failed</p>
-                    <p style="color: var(--gray-600); margin-bottom: 1.5rem;">${escapeHtml(data.error || 'An unexpected error occurred')}</p>
-                    <button class="btn btn-primary" onclick="showUploadPage()">Try Again</button>
-                </div>
-            `;
+            renderProgressError(
+                'Processing failed',
+                data.error || 'An unexpected error occurred',
+                '<button class="btn btn-primary" onclick="showUploadPage()">Try Again</button>'
+            );
         }
 
     } catch (error) {
-        clearInterval(pollInterval);
-        progressSection.innerHTML = `
-            <div role="alert" style="text-align: center; padding: 2rem;">
-                <p style="font-family: var(--font-grotesk); font-size: var(--text-lg); margin-bottom: 0.5rem;">Connection error</p>
-                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">Unable to check processing status.</p>
-                <button class="btn btn-primary" onclick="showUploadPage()">Try Again</button>
-            </div>
-        `;
+        pollRetryCount++;
+        if (pollRetryCount >= MAX_POLL_RETRIES) {
+            clearInterval(pollInterval);
+            renderProgressError(
+                'Connection lost',
+                `Unable to reach the server after ${MAX_POLL_RETRIES} attempts. Your audit may still be processing.`,
+                '<button class="btn btn-primary" onclick="showUploadPage()">Try Again</button>'
+            );
+        } else {
+            console.warn(`Status poll attempt ${pollRetryCount}/${MAX_POLL_RETRIES} failed: ${error.message}`);
+        }
     }
 }
 
@@ -542,11 +644,22 @@ async function renderResults(results) {
         await initTimeTravel(currentAuditId);
     } catch (error) {
         console.error('Failed to initialize time-travel view:', error);
-        // Show a user-friendly error message
+        const errorMsg = error.message || '';
+        let capMsg, eventMsg;
+        if (errorMsg.includes('401') || errorMsg.includes('403')) {
+            capMsg = 'Session expired. Please log in again to view the cap table.';
+            eventMsg = 'Session expired. Please log in again to view events.';
+        } else if (errorMsg.includes('404') || errorMsg.includes('No equity events')) {
+            capMsg = 'No equity events found for this audit. Check the compliance issues section for extraction warnings.';
+            eventMsg = 'No equity events found. This may indicate documents could not be fully processed.';
+        } else {
+            capMsg = `Failed to load cap table data. Try refreshing the page.`;
+            eventMsg = `Failed to load event data. Try refreshing the page.`;
+        }
         document.getElementById('cap-table-container').innerHTML =
-            '<p style="color: var(--accent); padding: 1rem;">Unable to load cap table. Please refresh the page.</p>';
+            `<p style="color: var(--accent); padding: 1rem;">${escapeHtml(capMsg)}</p>`;
         document.getElementById('event-stream-container').innerHTML =
-            '<p style="color: var(--accent); padding: 1rem;">Unable to load event stream. Please refresh the page.</p>';
+            `<p style="color: var(--accent); padding: 1rem;">${escapeHtml(eventMsg)}</p>`;
     }
 
     // Load download previews
@@ -583,7 +696,7 @@ function renderCompanyHeader(results) {
 
     // Render left column: Company info and stats with scroll-reveal classes
     const leftHTML = `
-        <h1 class="company-name scroll-reveal">${results.company_name || 'Unknown Company'}</h1>
+        <h1 class="company-name scroll-reveal">${results.company_name ? escapeHtml(results.company_name) : '<span style="color: var(--gray-400);">Company name not extracted</span>'}</h1>
         <p class="company-period scroll-reveal" data-delay="1">${dateRange}</p>
         <div class="company-stats scroll-reveal" data-delay="1">
             <div class="company-stat">
@@ -621,21 +734,28 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
         nameSpan.textContent = companyName;
     }
 
+    // Auto-expand compliance issues when critical issues exist
+    const hasCritical = complianceIssues.some(issue =>
+        issue.severity && issue.severity.toUpperCase() === 'CRITICAL'
+    );
+    const issueCount = complianceIssues.length;
+    const issueTitle = `Compliance Issues${issueCount > 0 ? ` (${issueCount})` : ''}`;
+
     const complianceItem = `
-        <div class="accordion-item">
-            <div class="accordion-header" role="button" tabindex="0" aria-expanded="false" onclick="toggleAccordion(this)" onkeydown="handleAccordionKeydown(event)">
-                <h3 class="accordion-title">Compliance Issues</h3>
-                <span class="accordion-toggle" aria-hidden="true">+</span>
+        <div class="accordion-item${hasCritical ? ' active' : ''}">
+            <div class="accordion-header" role="button" tabindex="0" aria-expanded="${hasCritical}" onclick="toggleAccordion(this)" onkeydown="handleAccordionKeydown(event)">
+                <h3 class="accordion-title">${issueTitle}</h3>
+                <span class="accordion-toggle" aria-hidden="true">${hasCritical ? '-' : '+'}</span>
             </div>
-            <div class="accordion-content" role="region" aria-hidden="true">
+            <div class="accordion-content" role="region" aria-hidden="${!hasCritical}" ${hasCritical ? 'style="max-height: 2000px;"' : ''}>
                 <div class="accordion-body">
                     ${complianceIssues.length
                         ? complianceIssues.map(issue => {
-                            if (typeof issue === 'string') return `<div class="issue-note spacer">${issue}</div>`;
+                            if (typeof issue === 'string') return `<div class="issue-note spacer">${escapeHtml(issue)}</div>`;
                             const sev = issue.severity ? issue.severity.toUpperCase() : 'ISSUE';
                             const desc = issue.description || issue.message || JSON.stringify(issue);
                             const sevClass = sev === 'CRITICAL' ? 'issue-critical' : sev === 'WARNING' ? 'issue-warning' : 'issue-note';
-                            return `<div class="${sevClass} spacer"><strong>${sev}:</strong> ${desc}</div>`;
+                            return `<div class="${sevClass} spacer"><strong>${escapeHtml(sev)}:</strong> ${escapeHtml(desc)}</div>`;
                           }).join('')
                         : 'No compliance issues.'}
                 </div>
@@ -652,7 +772,7 @@ function renderDocumentAccordion(documents, companyName, failedDocuments = [], c
             <div class="accordion-content" role="region" aria-hidden="true">
                 <div class="accordion-body">
                     ${failedDocuments.length
-                        ? failedDocuments.map(doc => `<div>${doc.filename || doc}</div>`).join('')
+                        ? failedDocuments.map(doc => `<div>${escapeHtml(doc.filename || String(doc))}</div>`).join('')
                         : 'No failed documents.'}
                 </div>
             </div>
@@ -711,7 +831,8 @@ function toggleAccordion(headerElement) {
 function handleAccordionKeydown(event) {
     if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
-        toggleAccordion(event.target);
+        const header = event.currentTarget || event.target;
+        toggleAccordion(header);
     }
 }
 
@@ -754,7 +875,7 @@ function buildDataRoomItem(documents) {
             if (docs.length === 0) {
                 return `
                     <div class="data-room-subitem">
-                        <div class="data-room-subitem-header">${subitem.label}</div>
+                        <div class="data-room-subitem-header">${escapeHtml(subitem.label)}</div>
                         <div class="data-room-subitem-empty">No documents</div>
                     </div>
                 `;
@@ -762,12 +883,12 @@ function buildDataRoomItem(documents) {
 
             return `
                 <div class="data-room-subitem">
-                    <div class="data-room-subitem-header">${subitem.label} (${docs.length})</div>
+                    <div class="data-room-subitem-header">${escapeHtml(subitem.label)} (${docs.length})</div>
                     <div class="data-room-subitem-docs">
                         ${docs.map(doc => {
                             const docId = doc.document_id || doc.id || '';
                             const name = doc.filename || 'Untitled';
-                            return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document" role="button" tabindex="0">${name}</div>`;
+                            return `<div class="doc-link" data-doc-id="${escapeHtml(docId)}" data-snippet="" title="View document" role="button" tabindex="0">${escapeHtml(name)}</div>`;
                         }).join('')}
                     </div>
                 </div>
@@ -777,7 +898,7 @@ function buildDataRoomItem(documents) {
         return `
             <div class="data-room-folder">
                 <div class="data-room-folder-header" onclick="toggleDataRoomFolder(this)" role="button" tabindex="0">
-                    <span class="data-room-folder-title">${folder.title}</span>
+                    <span class="data-room-folder-title">${escapeHtml(folder.title)}</span>
                     <span class="data-room-folder-count">${folderDocCount} doc${folderDocCount !== 1 ? 's' : ''}</span>
                     <span class="data-room-folder-toggle">+</span>
                 </div>
@@ -805,7 +926,7 @@ function buildDataRoomItem(documents) {
                     ${unplacedDocs.map(doc => {
                         const docId = doc.document_id || doc.id || '';
                         const name = doc.filename || 'Untitled';
-                        return `<div class="doc-link" data-doc-id="${docId}" data-snippet="" title="View document" role="button" tabindex="0">${name}</div>`;
+                        return `<div class="doc-link" data-doc-id="${escapeHtml(docId)}" data-snippet="" title="View document" role="button" tabindex="0">${escapeHtml(name)}</div>`;
                     }).join('')}
                 </div>
             </div>
@@ -936,7 +1057,19 @@ async function initTimeTravel(auditId) {
             if (!response.ok) {
                 throw new Error(`Failed to fetch events: ${response.statusText}`);
             }
-            AuditViewState.allEvents = await response.json();
+            const events = await response.json();
+            // Validate response structure
+            if (!Array.isArray(events)) {
+                throw new Error('Invalid response: expected array of events');
+            }
+            // Filter out malformed events
+            AuditViewState.allEvents = events.filter(event => {
+                if (!event.event_date || !event.event_type) {
+                    console.warn('Skipping malformed event:', event);
+                    return false;
+                }
+                return true;
+            });
         }
 
         if (AuditViewState.allEvents.length === 0) {
@@ -970,7 +1103,7 @@ async function initTimeTravel(auditId) {
 
     } catch (error) {
         console.error('Failed to initialize time travel:', error);
-        alert(`Failed to load audit data: ${error.message}`);
+        showUiNotice(`Failed to load audit data: ${error.message}`);
     }
 }
 
@@ -1018,18 +1151,21 @@ function renderHorizontalTimeline() {
     const timelineHTML = `
         <div class="timeline-track">
             <div class="timeline-line"></div>
+            <div class="timeline-line-active"></div>
             ${events.map((event, index) => {
-                // Equal spacing with edge padding for cleaner look
                 const padding = 4;
                 const usableWidth = 100 - (2 * padding);
                 const positionPercent = padding + (events.length > 1
                     ? (index / (events.length - 1)) * usableWidth
                     : usableWidth / 2);
-                const color = '#334C6A';
+                const safeEventId = escapeAttr(event.id || '');
+                const safeEventType = escapeAttr(event.event_type || 'event');
+                const safeShareholder = escapeAttr(event.shareholder_name || 'Company');
+                const safeEventDate = escapeAttr(new Date(event.event_date).toLocaleDateString());
 
                 return `
-                    <div class="timeline-node-wrapper" style="left: ${positionPercent}%;" data-event-id="${event.id}">
-                        <div class="timeline-node" style="background-color: ${color};" title="${event.event_type}: ${event.shareholder_name || 'Company'} - ${new Date(event.event_date).toLocaleDateString()}"></div>
+                    <div class="timeline-node-wrapper" style="left: ${positionPercent}%;" data-event-id="${safeEventId}" data-index="${index}">
+                        <div class="timeline-node" title="${safeEventType}: ${safeShareholder} - ${safeEventDate}"></div>
                         ${index % 3 === 0 || index === 0 || index === events.length - 1 ?
                             `<div class="timeline-date-label">${new Date(event.event_date).toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'})}</div>`
                             : ''}
@@ -1074,16 +1210,27 @@ function selectTimelineEvent(eventId) {
 
     // Update visual selection on timeline
     const allNodes = document.querySelectorAll('.timeline-node-wrapper');
+    let selectedLeft = 0;
     allNodes.forEach(node => {
         const nodeEventId = node.getAttribute('data-event-id');
-        const nodeCircle = node.querySelector('.timeline-node');
+        const tick = node.querySelector('.timeline-node');
+        const isSelected = nodeEventId === eventId;
+        const nodeIndex = parseInt(node.getAttribute('data-index'));
+        const selectedIndex = Array.from(allNodes).findIndex(n => n.getAttribute('data-event-id') === eventId);
 
-        if (nodeEventId === eventId) {
-            nodeCircle.classList.add('selected');
-        } else {
-            nodeCircle.classList.remove('selected');
+        tick.classList.toggle('selected', isSelected);
+        tick.classList.toggle('before-selected', nodeIndex < selectedIndex);
+
+        if (isSelected) {
+            selectedLeft = node.style.left;
         }
     });
+
+    // Update active line width to selected position
+    const activeLine = document.querySelector('.timeline-line-active');
+    if (activeLine) {
+        activeLine.style.width = selectedLeft;
+    }
 
     // Update date display
     const dateStr = new Date(event.event_date).toLocaleDateString('en-US', {
@@ -1145,7 +1292,7 @@ async function renderCapTable() {
 
     } catch (error) {
         console.error('Failed to render cap table:', error);
-        container.innerHTML = `<p style="color: var(--accent); font-size: 0.875rem;">Error loading cap table: ${error.message}</p>`;
+        container.innerHTML = `<p style="color: var(--accent); font-size: 0.875rem;">Error loading cap table: ${escapeHtml(error.message)}</p>`;
     }
 }
 
@@ -1176,12 +1323,12 @@ function renderIssuedView(capTableData, container, noteContainer) {
         row.innerHTML = `
             <td>
                 <span class="shareholder-dot" style="background-color: ${color};"></span>
-                ${sh.shareholder}
+                ${escapeHtml(sh.shareholder)}
                 ${sh.compliance_issues && sh.compliance_issues.length > 0 ?
-                    `<span style="color: var(--accent); font-size: 0.625rem; margin-left: 4px;" title="${sh.compliance_issues.join('; ')}">⚠</span>`
+                    `<span style="color: var(--accent); font-size: 0.625rem; margin-left: 4px;" title="${escapeHtml(sh.compliance_issues.join('; '))}">⚠</span>`
                     : ''}
             </td>
-            <td>${sh.share_class || 'Common'}</td>
+            <td>${escapeHtml(sh.share_class || 'Common')}</td>
             <td class="monospace">${formatNumber(sh.shares)}</td>
             <td class="monospace ownership-number">${formatPercent(sh.ownership_pct)}</td>
         `;
@@ -1221,7 +1368,7 @@ function renderIssuedView(capTableData, container, noteContainer) {
  * Render Fully Diluted view
  */
 function renderFullyDilutedView(capTableData, optionsData, container, noteContainer) {
-    noteContainer.textContent = 'Shows ownership if all options and convertibles are exercised.';
+    noteContainer.textContent = 'Shows ownership if all option grants are exercised. Convertibles are not currently modeled.';
 
     // Combine issued shares + options
     const shareholderMap = new Map();
@@ -1289,7 +1436,7 @@ function renderFullyDilutedView(capTableData, optionsData, container, noteContai
         row.innerHTML = `
             <td>
                 <span class="shareholder-dot" style="background-color: ${color};"></span>
-                ${sh.shareholder}
+                ${escapeHtml(sh.shareholder)}
             </td>
             <td class="monospace">${formatNumber(sh.issued_shares)}</td>
             <td class="monospace">${formatNumber(sh.option_shares)}</td>
@@ -1356,12 +1503,12 @@ function renderOptionsView(optionsData, container, noteContainer) {
         row.innerHTML = `
             <td>
                 <span class="shareholder-dot" style="background-color: ${color};"></span>
-                ${opt.recipient}
+                ${escapeHtml(opt.recipient)}
             </td>
-            <td class="monospace">${opt.grant_date || 'N/A'}</td>
+            <td class="monospace">${escapeHtml(opt.grant_date || 'N/A')}</td>
             <td class="monospace">${formatNumber(opt.shares)}</td>
             <td class="monospace">$${(opt.strike_price || 0).toFixed(4)}</td>
-            <td style="font-size: 0.75rem;">${opt.vesting_schedule || 'Not specified'}</td>
+            <td style="font-size: 0.75rem;">${escapeHtml(opt.vesting_schedule || 'Not specified')}</td>
         `;
 
         tbody.appendChild(row);
@@ -1406,7 +1553,8 @@ function renderEventStream() {
     const fragment = document.createDocumentFragment();
     visibleEvents.forEach(event => {
         const card = document.createElement('div');
-        const statusClass = event.compliance_status.toLowerCase();
+        const rawStatus = (event.compliance_status || '').toLowerCase();
+        const statusClass = ['verified', 'warning', 'critical'].includes(rawStatus) ? rawStatus : 'warning';
         card.className = `event-card ${statusClass}`;
         let shareholderColor = null;
         if (event.shareholder_name) {
@@ -1427,9 +1575,9 @@ function renderEventStream() {
         let detailsText = '';
         if (event.shareholder_name) {
             shareholderColor = getShareholderColor(event.shareholder_name);
-            detailsText = `<span class="shareholder-pill" style="background-color: ${shareholderColor};">${event.shareholder_name}</span>`;
+            detailsText = `<span class="shareholder-pill" style="background-color: ${shareholderColor};">${escapeHtml(event.shareholder_name)}</span>`;
             if (event.share_delta !== 0) {
-                detailsText += ` ${event.share_delta > 0 ? '+' : ''}${formatNumber(event.share_delta)} ${event.share_class || 'shares'}`;
+                detailsText += ` ${event.share_delta > 0 ? '+' : ''}${formatNumber(event.share_delta)} ${escapeHtml(event.share_class || 'shares')}`;
             }
         }
 
@@ -1442,20 +1590,21 @@ function renderEventStream() {
             ? event.details.preview_focus_y
             : null;
         const previewStyle = focusY !== null ? `object-position: 50% ${focusY * 100}%;` : '';
+        const previewSrc = sanitizeImageSrc(event.preview_image);
 
         card.innerHTML = `
             <div class="event-card-header">
-                <span class="event-type">${eventTypeDisplay}</span>
+                <span class="event-type">${escapeHtml(eventTypeDisplay)}</span>
                 <span class="event-date">${eventDateStr}</span>
             </div>
 
             ${event.summary ? `
-                <div class="event-summary">${event.summary}</div>
+                <div class="event-summary">${escapeHtml(event.summary)}</div>
             ` : (detailsText ? `<div class="event-details" style="${shareholderColor ? `border-left: 5px solid ${shareholderColor}; padding-left: 8px;` : ''}">${detailsText}</div>` : '')}
 
-            ${event.preview_image ? `
-                <div class="event-preview" data-doc-id="${event.source_doc_id}" title="Click to view full document">
-                    <img src="${event.preview_image}"
+            ${previewSrc ? `
+                <div class="event-preview" data-doc-id="${escapeHtml(event.source_doc_id || '')}" title="Click to view full document">
+                    <img src="${escapeAttr(previewSrc)}"
                          alt="Document preview"
                          class="event-preview-image"
                          loading="lazy"
@@ -1478,12 +1627,12 @@ function renderEventStream() {
                 </div>
             ` : ''}
 
-            ${!event.summary && event.source_snippet ? `<div class="source-quote">"${event.source_snippet}"</div>` : ''}
-            ${event.compliance_note ? `<div class="compliance-note">${event.compliance_note}</div>` : ''}
+            ${!event.summary && event.source_snippet ? `<div class="source-quote">"${escapeHtml(event.source_snippet)}"</div>` : ''}
+            ${event.compliance_note ? `<div class="compliance-note">${escapeHtml(event.compliance_note)}</div>` : ''}
 
             <div class="event-links">
-                ${event.source_doc_id ? `<a href="#" class="event-link" data-doc-id="${event.source_doc_id}" data-snippet="${event.source_snippet || ''}" title="View source document">Source Document</a>` : ''}
-                ${event.approval_doc_id ? `<a href="#" class="event-link" data-doc-id="${event.approval_doc_id}" data-snippet="${event.approval_snippet || ''}" title="View approval document">Board Approval</a>` : ''}
+                ${event.source_doc_id ? `<a href="#" class="event-link" data-doc-id="${escapeHtml(event.source_doc_id)}" data-snippet="${escapeHtml((event.source_snippet || '').replace(/"/g, ''))}" title="View source document">Source Document</a>` : ''}
+                ${event.approval_doc_id ? `<a href="#" class="event-link" data-doc-id="${escapeHtml(event.approval_doc_id)}" data-snippet="${escapeHtml((event.approval_snippet || '').replace(/"/g, ''))}" title="View approval document">Board Approval</a>` : ''}
             </div>
         `;
 
@@ -1504,7 +1653,7 @@ function renderEventStream() {
                 const docId = link.getAttribute('data-doc-id');
                 const snippet = link.getAttribute('data-snippet');
                 if (docId) {
-                    showDocumentModal(AuditViewState.auditId, docId, snippet || null, event.preview_image || null);
+                    showDocumentModal(AuditViewState.auditId, docId, snippet || null, previewSrc || null);
                 }
             });
         });
@@ -1516,7 +1665,7 @@ function renderEventStream() {
                 e.stopPropagation();
                 const docId = eventPreview.getAttribute('data-doc-id');
                 if (docId) {
-                    showDocumentModal(AuditViewState.auditId, docId, null, event.preview_image || null);
+                    showDocumentModal(AuditViewState.auditId, docId, null, previewSrc || null);
                 }
             });
         }
@@ -1537,10 +1686,13 @@ function renderEventStream() {
  */
 function highlightShareholder(shareholderName, action) {
     if (!shareholderName) return;
+    const safeSelectorValue = window.CSS && typeof window.CSS.escape === 'function'
+        ? window.CSS.escape(shareholderName)
+        : shareholderName.replace(/["\\]/g, '\\$&');
 
     // Find all elements with this shareholder
-    const capTableRows = document.querySelectorAll(`.cap-table-row[data-shareholder="${shareholderName}"]`);
-    const eventCards = document.querySelectorAll(`.event-card[data-shareholder="${shareholderName}"]`);
+    const capTableRows = document.querySelectorAll(`.cap-table-row[data-shareholder="${safeSelectorValue}"]`);
+    const eventCards = document.querySelectorAll(`.event-card[data-shareholder="${safeSelectorValue}"]`);
 
     if (action === 'enter') {
         capTableRows.forEach(row => row.classList.add('highlight'));
@@ -1625,32 +1777,43 @@ async function loadPastAudits() {
             let statusBadge = '';
             if (audit.status === 'complete') {
                 statusBadge = '<span class="status-badge status-complete">✓ Complete</span>';
-            } else if (audit.status === 'processing') {
+            } else if (audit.status === 'needs_review') {
+                statusBadge = '<span class="status-badge status-error">Review Required</span>';
+            } else if (['queued', 'parsing', 'classifying', 'extracting', 'reconciling', 'processing'].includes(audit.status)) {
                 statusBadge = '<span class="status-badge status-processing">Processing...</span>';
             } else if (audit.status === 'error') {
                 statusBadge = '<span class="status-badge status-error">⚠ Failed</span>';
             }
 
+            const isLoadable = audit.status === 'complete' || audit.status === 'needs_review';
+            const safeAuditId = escapeAttr(audit.id);
+
             return `
-                <div class="accordion-item audit-item ${audit.status !== 'complete' ? 'disabled' : ''}"
-                     data-audit-id="${audit.id}"
-                     ${audit.status === 'complete' ? 'onclick="loadAuditById(\'' + audit.id + '\')"' : ''}>
+                <div class="accordion-item audit-item ${!isLoadable ? 'disabled' : ''}"
+                     data-audit-id="${safeAuditId}"
+                     data-loadable="${isLoadable ? 'true' : 'false'}">
                     <div class="accordion-header">
                         <div class="audit-header-content">
-                            <h3 class="accordion-title">${displayName}</h3>
+                            <h3 class="accordion-title">${escapeHtml(displayName)}</h3>
                             <p class="audit-metadata">
                                 ${date} • ${audit.document_count} documents ${statusBadge}
                             </p>
                             ${audit.upload_filename && audit.company_name ?
-                                `<p class="audit-filename">${audit.upload_filename}</p>` : ''}
+                                `<p class="audit-filename">${escapeHtml(audit.upload_filename)}</p>` : ''}
                         </div>
-                        ${audit.status === 'complete' ? '<span class="accordion-toggle">→</span>' : ''}
+                        ${isLoadable ? '<span class="accordion-toggle">→</span>' : ''}
                     </div>
                 </div>
             `;
         }).join('');
 
         container.innerHTML = html;
+        container.querySelectorAll('.audit-item[data-loadable="true"]').forEach(item => {
+            item.addEventListener('click', () => {
+                const auditId = item.getAttribute('data-audit-id');
+                if (auditId) loadAuditById(auditId);
+            });
+        });
 
     } catch (error) {
         console.error('Error loading past audits:', error);
@@ -1666,8 +1829,7 @@ async function loadAuditById(auditId) {
         // Show progress
         hideAllSections();
         progressSection.style.display = 'flex';
-        progressStep.textContent = 'Loading';
-        progressText.textContent = 'Loading past audit...';
+        setProgressState('Loading', 'Loading past audit...');
 
         // Fetch audit data
         const response = await fetch(`/status/${auditId}`);
@@ -1677,13 +1839,16 @@ async function loadAuditById(auditId) {
 
         const data = await response.json();
 
-        if (data.status === 'complete') {
+        if (data.status === 'complete' || data.status === 'needs_review') {
             // Set current audit ID (for time-travel features)
             currentAuditId = auditId;
 
             // Hide progress, render results
             progressSection.style.display = 'none';
             await renderResults(data.results);
+            if (data.review_required) {
+                showUiNotice('This audit is marked review-required. Validate confidence warnings and evidence links before use.');
+            }
 
         } else if (data.status === 'error') {
             throw new Error(data.error || 'Audit failed');
@@ -1692,14 +1857,12 @@ async function loadAuditById(auditId) {
         }
 
     } catch (error) {
-        progressSection.innerHTML = `
-            <div role="alert" style="text-align: center; padding: 2rem;">
-                <p style="font-family: var(--font-grotesk); font-size: var(--text-lg); margin-bottom: 0.5rem;">Failed to load audit</p>
-                <p style="color: var(--gray-600); margin-bottom: 1.5rem;">${escapeHtml(error.message)}</p>
-                <button class="btn btn-secondary" onclick="loadPastAudits()" style="margin-right: 0.5rem;">Back to Audits</button>
-                <button class="btn btn-primary" onclick="loadAuditById('${auditId}')">Retry</button>
-            </div>
-        `;
+        renderProgressError(
+            'Failed to load audit',
+            error.message,
+            `<button class="btn btn-secondary" onclick="loadPastAudits()" style="margin-right: 0.5rem;">Back to Audits</button>
+             <button class="btn btn-primary" onclick="loadAuditById('${escapeAttr(auditId)}')">Retry</button>`
+        );
     }
 }
 
@@ -1726,12 +1889,15 @@ function showUploadPage() {
 
     // Restore progress section HTML if it was replaced by error message
     progressSection.innerHTML = `
-        <div class="loader-container">
+        <div class="loader-row" aria-hidden="true">
             <div class="loader"></div><div class="loader"></div><div class="loader"></div>
         </div>
-        <p id="progress-step" class="progress-step">Processing</p>
-        <p id="progress-text" class="progress-text" aria-live="polite" aria-busy="true">Starting...</p>
+        <div id="progress-wrapper">
+            <span id="progress-step" role="status">Processing</span>
+            <span id="progress-text">Starting...</span>
+        </div>
     `;
+    refreshProgressRefs();
 
     // Reset cap table upload state
     selectedCaptableFile = null;
@@ -1782,7 +1948,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Arrow keys: Navigate timeline (only when timeline is visible)
         if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-            const timelineEl = document.querySelector('.horizontal-timeline');
+            const timelineEl = document.getElementById('horizontal-timeline');
             const isTimelineVisible = timelineEl && timelineEl.offsetParent !== null;
             if (isTimelineVisible && AuditViewState.allEvents && AuditViewState.allEvents.length > 0) {
                 e.preventDefault();
@@ -1831,7 +1997,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 const response = await fetch('/api/auth/logout', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        ...getCsrfHeaders()
                     }
                 });
 
@@ -1846,11 +2013,11 @@ document.addEventListener('DOMContentLoaded', () => {
                     window.location.href = '/';
                 } else {
                     console.error('Logout failed:', response.statusText);
-                    alert('Logout failed. Please try again.');
+                    showUiNotice('Logout failed. Please try again.');
                 }
             } catch (error) {
                 console.error('Logout error:', error);
-                alert('Network error during logout. Please try again.');
+                showUiNotice('Network error during logout. Please try again.');
             }
         });
     }
@@ -1930,8 +2097,12 @@ async function showDocumentModal(auditId, docId, snippetToHighlight = null, prev
 
         // If we have a preview image, show that instead of raw text
         if (previewImage) {
+            const safePreview = sanitizeImageSrc(previewImage);
+            if (!safePreview) {
+                throw new Error('Invalid preview image source');
+            }
             modalContent.innerHTML = `
-                <img src="${previewImage}" alt="Document preview"
+                <img src="${escapeAttr(safePreview)}" alt="Document preview"
                      style="width: 100%; max-height: 70vh; object-fit: contain; background: var(--gray-50);" />
             `;
         } else {
@@ -2018,8 +2189,21 @@ function _removeFocusTrap() {
  */
 function escapeHtml(text) {
     const div = document.createElement('div');
-    div.textContent = text;
+    div.textContent = text == null ? '' : String(text);
     return div.innerHTML;
+}
+
+function escapeAttr(text) {
+    return escapeHtml(text);
+}
+
+function sanitizeImageSrc(src) {
+    if (typeof src !== 'string') return '';
+    const trimmed = src.trim();
+    if (trimmed.startsWith('data:image/')) return trimmed;
+    if (trimmed.startsWith('/')) return trimmed;
+    if (/^https?:\/\//i.test(trimmed)) return trimmed;
+    return '';
 }
 
 /**
