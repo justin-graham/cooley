@@ -744,34 +744,6 @@ video {
     line-height: 1.2;
 }
 
-.company-stats {
-    display: flex;
-    gap: var(--spacing-xl);
-    margin-top: var(--spacing-md);
-}
-
-.company-stat {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.company-stat-label {
-    font-family: var(--font-sans);
-    font-size: 0.6875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: var(--text-secondary);
-    font-weight: 600;
-}
-
-.company-stat-value {
-    font-family: var(--font-mono);
-    font-size: 1.125rem;
-    color: var(--navy);
-    font-weight: 700;
-}
-
 /* Legacy terminal styling (for backwards compat if needed) */
 .terminal-line {
     margin: var(--spacing-sm) 0;
@@ -1354,6 +1326,11 @@ button:focus-visible, .button:focus-visible {
     padding: 10px 12px;
     min-height: var(--touch-target-min);
     border-radius: var(--radius-sm);
+    margin-left: 2rem;
+}
+
+.nav-link:first-child {
+    margin-left: 0;
 }
 
 .nav-link:hover {
@@ -1974,133 +1951,6 @@ button:focus-visible, .button:focus-visible {
 }
 
 /* ============================================================================
-   SOLUTIONS STRIP (MARQUEE + CARDS)
-   ============================================================================ */
-
-.solutions-strip {
-    background: var(--navy-dark);
-    padding: calc(var(--spacing-2xl) * 2) 0;
-    overflow: hidden;
-    border-top: var(--grid-line-w) solid var(--grid-line);
-    border-bottom: var(--grid-line-w) solid var(--grid-line);
-}
-
-.solutions-container {
-    max-width: 1400px;
-    margin: 0 auto;
-    padding: 0 var(--spacing-xl);
-    border-left: var(--grid-line-w) solid rgba(255, 255, 255, 0.12);
-    border-right: var(--grid-line-w) solid rgba(255, 255, 255, 0.12);
-}
-
-/* Logo Marquee */
-.logo-marquee {
-    margin-bottom: calc(var(--spacing-2xl) * 2);
-    overflow: hidden;
-    position: relative;
-}
-
-.marquee-track {
-    display: flex;
-    gap: calc(var(--spacing-2xl) * 3);
-    animation: marqueeScroll 20s linear infinite;
-    width: fit-content;
-}
-
-.marquee-logo {
-    height: 60px;
-    width: auto;
-    opacity: 0.3;
-    filter: brightness(0) invert(1);
-}
-
-@keyframes marqueeScroll {
-    0% {
-        transform: translateX(0);
-    }
-    100% {
-        transform: translateX(-50%);
-    }
-}
-
-/* Solution Cards */
-.solution-cards {
-    display: grid;
-    grid-template-columns: repeat(4, 1fr);
-    gap: var(--spacing-xl);
-}
-
-.solution-card {
-    background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: var(--radius-md);
-    padding: var(--spacing-xl);
-    text-align: center;
-    transition: all 200ms ease-out;
-}
-
-.solution-card:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-    transform: translateY(-4px);
-}
-
-.solution-card.featured {
-    background: var(--accent);
-    border-color: var(--accent);
-    grid-column: span 1;
-}
-
-.solution-card.featured:hover {
-    background: #B82418;
-    border-color: #B82418;
-}
-
-.solution-icon {
-    width: 64px;
-    height: 64px;
-    margin: 0 auto var(--spacing-md);
-    display: block;
-}
-
-.solution-card h3 {
-    font-size: 1rem;
-    margin: 0 0 var(--spacing-xs) 0;
-    color: white;
-    font-family: var(--font-grotesk);
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-}
-
-.solution-card p {
-    font-size: 0.875rem;
-    color: rgba(255, 255, 255, 0.8);
-    margin: 0;
-}
-
-.solution-placeholder h3 {
-    color: rgba(255, 255, 255, 0.6);
-}
-
-.solution-placeholder p {
-    color: rgba(255, 255, 255, 0.4);
-    font-style: italic;
-}
-
-/* Responsive: 4-up → 2-up → 1-up */
-@media (max-width: 1024px) {
-    .solution-cards {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
-@media (max-width: 640px) {
-    .solution-cards {
-        grid-template-columns: 1fr;
-    }
-}
-
-/* ============================================================================
    TIME-TRAVEL CAP TABLE VIEW
    ============================================================================ */
 
@@ -2190,9 +2040,9 @@ button:focus-visible, .button:focus-visible {
 .split-view {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-md);
-    height: calc(100vh - 220px); /* Full height minus header + controls */
-    min-height: 600px;
+    gap: var(--spacing-lg);
+    min-height: 500px;
+    margin: var(--spacing-xl) 0;
 }
 
 .panel-left,
@@ -2203,6 +2053,7 @@ button:focus-visible, .button:focus-visible {
     padding: var(--spacing-xl);
     border-radius: 0;
     box-shadow: none;
+    max-height: 900px;
 }
 
 .panel-left h2,
@@ -2483,12 +2334,21 @@ button:focus-visible, .button:focus-visible {
 @media (max-width: 1024px) {
     .split-view {
         grid-template-columns: 1fr;
-        height: auto;
+        min-height: auto;
     }
 
     .panel-left,
     .panel-right {
         min-height: 400px;
+        max-height: 480px;
+    }
+
+    .timeline-track {
+        margin: 0 var(--spacing-sm);
+    }
+
+    .timeline-date-label {
+        font-size: 0.5rem;
     }
 }
 
@@ -3018,44 +2878,6 @@ button:focus-visible, .button:focus-visible {
     display: none;
 }
 
-/* ============================================================================
-   LAYOUT UPDATES
-   ============================================================================ */
-
-.split-view {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: var(--spacing-lg);
-    min-height: 500px;
-    margin: var(--spacing-xl) 0;
-}
-
-.panel-left,
-.panel-right {
-    overflow-y: auto;
-    max-height: 900px;
-}
-
-/* Responsive: Stack panels on tablet/mobile */
-@media (max-width: 1024px) {
-    .split-view {
-        grid-template-columns: 1fr;
-        min-height: auto;
-    }
-
-    .panel-left,
-    .panel-right {
-        max-height: 480px;
-    }
-
-    .timeline-track {
-        margin: 0 var(--spacing-sm);
-    }
-
-    .timeline-date-label {
-        font-size: 0.5rem;
-    }
-}
 
 /* ============================================================================
    DOWNLOADS SECTION (Martian Grid)
@@ -3250,33 +3072,8 @@ button:focus-visible, .button:focus-visible {
 }
 
 /* ============================================================================
-   CANVAS ANIMATION (Hero Section)
-   ============================================================================ */
-
-.hero-canvas {
-    width: 100%;
-    max-width: 500px;
-    height: 400px;
-    display: block;
-    border: 1px solid #000;
-    background: var(--bg-pure);
-}
-
-/* Responsive */
-@media (max-width: 768px) {
-    .hero-canvas {
-        height: 300px;
-    }
-}
-
-/* ============================================================================
    PAST AUDITS SECTION
    ============================================================================ */
-
-.past-audits-left,
-.past-audits-right {
-    /* Inherits from martian-column-left/right */
-}
 
 .past-audits-left {
     background: var(--bg-pure);
@@ -3351,14 +3148,6 @@ button:focus-visible, .button:focus-visible {
     color: #ef4444;
 }
 
-/* Navigation updates */
-.nav-link {
-    margin-left: 2rem;
-}
-
-.nav-link:first-child {
-    margin-left: 0;
-}
 
 /* ============================================================================
    CAP TABLE TAB CONTROLS

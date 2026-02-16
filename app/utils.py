@@ -3,6 +3,7 @@ Document parsing utilities for PDF, DOCX, XLSX, and PPTX files.
 Gracefully handles errors - returns error message instead of crashing.
 """
 
+import hashlib
 import os
 import logging
 import zipfile
@@ -28,35 +29,6 @@ try:
     PIL_AVAILABLE = True
 except ImportError:
     PIL_AVAILABLE = False
-
-
-def unzip_file(zip_path: str) -> List[str]:
-    """
-    Extract a zip file to a temporary directory.
-
-    Args:
-        zip_path: Path to the .zip file
-
-    Returns:
-        List of extracted file paths
-    """
-    extract_dir = tempfile.mkdtemp()
-
-    with zipfile.ZipFile(zip_path, 'r') as zip_ref:
-        zip_ref.extractall(extract_dir)
-
-    # Recursively find all files (not directories)
-    file_paths = []
-    for root, dirs, files in os.walk(extract_dir):
-        # Skip __MACOSX directories entirely
-        if '__MACOSX' in root:
-            continue
-        for file in files:
-            # Skip hidden files and system files
-            if not file.startswith('.'):
-                file_paths.append(os.path.join(root, file))
-
-    return file_paths
 
 
 def extract_from_pdf(file_path: str) -> str:
@@ -330,144 +302,6 @@ def convert_to_pdf(filepath: str, output_dir: str) -> str:
     return output_pdf
 
 
-def parse_document_with_paragraphs(file_path: str) -> Dict[str, Any]:
-    """
-    Parse a document file and extract text with paragraph numbering.
-    Each substantive paragraph gets a sequential number for citation purposes.
-
-    Args:
-        file_path: Path to document file
-
-    Returns:
-        Dictionary with keys:
-        - filename: str
-        - type: str (pdf, docx, xlsx, pptx, or unknown)
-        - full_text: str (complete extracted text)
-        - paragraphs: List[Dict] with {number: int, text: str}
-        - error: str (error message if parsing failed, otherwise absent)
-    """
-    # First get the basic parsed result
-    basic_result = parse_document(file_path)
-
-    result = {
-        'filename': basic_result['filename'],
-        'type': basic_result['type'],
-        'full_text': basic_result.get('text', ''),
-        'paragraphs': []
-    }
-
-    # If there was an error in basic parsing, return it
-    if 'error' in basic_result:
-        result['error'] = basic_result['error']
-        return result
-
-    # Split text into paragraphs and number them
-    full_text = basic_result.get('text', '')
-    if not full_text:
-        return result
-
-    # Split on double newlines (paragraph breaks) or single newlines for tighter docs
-    raw_paragraphs = full_text.split('\n')
-
-    paragraph_number = 1
-    current_paragraph = []
-
-    for line in raw_paragraphs:
-        stripped_line = line.strip()
-
-        # Skip truly empty lines
-        if not stripped_line:
-            # If we have accumulated text, save it as a paragraph
-            if current_paragraph:
-                para_text = ' '.join(current_paragraph)
-                if len(para_text) > 20:  # Minimum 20 chars to be substantive
-                    result['paragraphs'].append({
-                        'number': paragraph_number,
-                        'text': para_text
-                    })
-                    paragraph_number += 1
-                current_paragraph = []
-            continue
-
-        # Accumulate non-empty lines
-        current_paragraph.append(stripped_line)
-
-    # Don't forget the last paragraph
-    if current_paragraph:
-        para_text = ' '.join(current_paragraph)
-        if len(para_text) > 20:
-            result['paragraphs'].append({
-                'number': paragraph_number,
-                'text': para_text
-            })
-
-    return result
-
-
-def parse_document(file_path: str) -> Dict[str, Any]:
-    """
-    Parse a document file and extract text content.
-    Gracefully handles errors - returns error dict instead of raising.
-
-    Args:
-        file_path: Path to document file
-
-    Returns:
-        Dictionary with keys:
-        - filename: str
-        - type: str (pdf, docx, xlsx, pptx, or unknown)
-        - text: str (extracted text, or empty if error)
-        - error: str (error message if parsing failed, otherwise absent)
-    """
-    filename = os.path.basename(file_path)
-    file_ext = os.path.splitext(filename)[1].lower()
-
-    result = {
-        'filename': filename,
-        'type': file_ext.lstrip('.'),
-        'text': ''
-    }
-
-    try:
-        # Route to appropriate parser based on extension
-        if file_ext == '.pdf':
-            try:
-                result['text'] = extract_from_pdf(file_path)
-            except NameError as e:
-                # Library bug in pymupdf4llm - use fallback extraction
-                logger.warning(f"pymupdf4llm bug for {filename}, using fallback: {e}")
-                result['text'] = extract_from_pdf_fallback(file_path)
-        elif file_ext == '.docx':
-            result['text'] = extract_from_docx(file_path)
-        elif file_ext == '.xlsx':
-            result['text'] = extract_from_xlsx(file_path)
-        elif file_ext == '.pptx':
-            result['text'] = extract_from_pptx(file_path)
-        elif file_ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp']:
-            result['text'] = extract_from_image(file_path)
-        elif not file_ext or file_ext == '.':
-            # Files without extension - try to read as text
-            try:
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    result['text'] = f.read(1000)  # First 1000 chars
-            except:
-                result['error'] = f"Unsupported file type: no extension"
-                return result
-        else:
-            # Unsupported file type
-            result['error'] = f"Unsupported file type: {file_ext}"
-            return result
-
-        # Check if extraction yielded any content
-        if not result['text'] or len(result['text'].strip()) < 10:
-            result['error'] = "Document appears to be empty or unreadable"
-
-    except Exception as e:
-        result['error'] = f"Failed to parse: {str(e)}"
-
-    return result
-
-
 def validate_zip_file(file_path: str, max_size_mb: int = 50) -> tuple[bool, str]:
     """
     Validate that a file is a valid zip and within size limits.
@@ -718,7 +552,23 @@ def unzip_file_robust(zip_path: str) -> Tuple[List[Dict[str, Any]], List[Dict[st
         logger.error(f"Failed to open zip file: {e}")
         raise
 
-    return extracted_files, skipped_files
+    # Deduplicate by file content hash
+    seen_hashes = {}
+    deduped_files = []
+    for f in extracted_files:
+        try:
+            h = hashlib.sha256(open(f['path'], 'rb').read()).hexdigest()
+        except Exception:
+            deduped_files.append(f)
+            continue
+        if h in seen_hashes:
+            logger.info(f"Skipping duplicate: {f['original_name']} (same content as {seen_hashes[h]})")
+            skipped_files.append({'original_name': f['original_name'], 'reason': f"Duplicate of {seen_hashes[h]}", 'parse_status': 'skipped'})
+        else:
+            seen_hashes[h] = f['original_name']
+            deduped_files.append(f)
+
+    return deduped_files, skipped_files
 
 
 def parse_document_robust(file_path: str) -> Dict[str, Any]:

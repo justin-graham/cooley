@@ -1,6 +1,6 @@
 import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 os.environ.setdefault("ANTHROPIC_API_KEY", "test-key")
 os.environ.setdefault("DATABASE_URL", "postgresql://postgres:postgres@localhost:5432/corporate_audit")
@@ -69,7 +69,7 @@ class ApprovalAndQualityGateTests(unittest.TestCase):
             "text": "Minutes excerpt",
         }]
 
-        with patch.object(processing, "call_claude", return_value="[]"):
+        with patch("app.processing.extractor.call_claude", return_value="[]"):
             matched = processing.match_approvals_batch(txs, docs)
 
         self.assertEqual(len(matched), 1)
