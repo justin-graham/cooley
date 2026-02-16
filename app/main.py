@@ -1225,6 +1225,15 @@ async def startup_event():
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
 
+    # Auto-apply pending database migrations
+    try:
+        applied = db.run_migrations()
+        if applied:
+            logger.info(f"Applied {applied} pending database migration(s)")
+    except Exception as e:
+        logger.error(f"Database migration failed: {e}")
+        raise
+
     try:
         removed = db.cleanup_expired_sessions()
         if removed:

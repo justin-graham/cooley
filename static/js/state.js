@@ -10,6 +10,7 @@ export const appState = {
     demoDataCache: null,
     isUploading: false,
     selectedCaptableFile: null,
+    selectedZipFile: null,
     pollRetryCount: 0,
 };
 
@@ -19,13 +20,14 @@ export const MAX_POLL_RETRIES = 5;
 const SECTION_DISPLAY = {
     'upload-header': 'block',
     'upload-section': 'grid',
+    'begin-tieout-section': 'flex',
     'progress': 'flex',
     'results': 'block',
     'past-audits-section': 'grid',
 };
 
 const VIEW_SECTIONS = {
-    upload: ['upload-header', 'upload-section'],
+    upload: ['upload-header', 'upload-section', 'begin-tieout-section'],
     processing: ['progress'],
     results: ['results'],
     pastAudits: ['past-audits-section'],

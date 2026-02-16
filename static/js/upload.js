@@ -59,23 +59,38 @@ function handleCaptableFile(file) {
     zone.querySelector('.secondary-text').textContent = 'Cap table selected. Now upload your .zip file.';
 }
 
-async function handleFileUpload(file) {
-    if (appState.isUploading) return;
+function handleFileUpload(file) {
     if (!file.name.endsWith('.zip')) { showUiNotice('Please upload a .zip file.'); return; }
     if (file.size > 50 * 1024 * 1024) {
         showUiNotice(`File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Maximum is 50MB.`);
         return;
     }
 
+    appState.selectedZipFile = file;
+    const zone = document.getElementById('upload-zone');
+    zone.classList.add('file-selected');
+    zone.querySelector('.primary-text').textContent = file.name;
+    zone.querySelector('.secondary-text').textContent = 'Zip file selected.';
+    updateBeginButton();
+}
+
+function updateBeginButton() {
+    const btn = document.getElementById('begin-tieout-btn');
+    if (btn) btn.disabled = !appState.selectedZipFile;
+}
+
+export async function beginTieout() {
+    if (appState.isUploading || !appState.selectedZipFile) return;
+
     appState.isUploading = true;
     const uploadZone = document.getElementById('upload-zone');
     if (uploadZone) uploadZone.classList.add('uploading');
 
     showView('processing');
-    setProgressState('Uploading', 'Uploading zip file...');
+    setProgressState('Uploading', 'Uploading files...');
 
     try {
-        const data = await api.upload(file, appState.selectedCaptableFile);
+        const data = await api.upload(appState.selectedZipFile, appState.selectedCaptableFile);
         appState.currentAuditId = data.audit_id;
         startPolling();
     } catch (error) {

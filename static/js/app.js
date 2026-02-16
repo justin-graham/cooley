@@ -3,7 +3,7 @@
 import { appState, showView, setHomeLinkVisibility, showUiNotice, resetProgressSection } from './state.js';
 import { getCsrfHeaders } from './utils.js';
 import { api } from './api.js';
-import { initUpload } from './upload.js';
+import { initUpload, beginTieout } from './upload.js';
 import { initDemoModeIfNeeded } from './demo.js';
 import { hideDocumentModal } from './modal.js';
 import { loadPastAudits, loadAuditById } from './past-audits.js';
@@ -27,17 +27,34 @@ function showUploadPage() {
 
     // Reset cap table upload state
     appState.selectedCaptableFile = null;
-    const zone = document.getElementById('captable-upload-zone');
-    if (zone) {
-        zone.classList.remove('file-selected');
-        zone.querySelector('.primary-text').textContent = 'Drop your .xlsx file here or click to browse.';
-        zone.querySelector('.secondary-text').textContent = 'Optional. Carta export (.xlsx)';
+    const captableZone = document.getElementById('captable-upload-zone');
+    if (captableZone) {
+        captableZone.classList.remove('file-selected');
+        captableZone.querySelector('.primary-text').textContent = 'Drop your .xlsx file here or click to browse.';
+        captableZone.querySelector('.secondary-text').textContent = 'Optional. Carta export (.xlsx)';
     }
+
+    // Reset zip upload state
+    appState.selectedZipFile = null;
+    const zipZone = document.getElementById('upload-zone');
+    if (zipZone) {
+        zipZone.classList.remove('file-selected');
+        zipZone.querySelector('.primary-text').textContent = 'Drop your .zip file here or click to browse.';
+        zipZone.querySelector('.secondary-text').textContent = 'Maximum file size: 50MB';
+    }
+
+    // Reset begin button
+    const beginBtn = document.getElementById('begin-tieout-btn');
+    if (beginBtn) beginBtn.disabled = true;
 }
 
 document.addEventListener('DOMContentLoaded', () => {
     // Initialize upload zones
     initUpload();
+
+    // Wire up Begin Tieout button
+    const beginBtn = document.getElementById('begin-tieout-btn');
+    if (beginBtn) beginBtn.addEventListener('click', beginTieout);
 
     // Scroll reveal
     initScrollReveal();

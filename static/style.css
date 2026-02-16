@@ -534,6 +534,53 @@ p {
     color: var(--text-secondary);
 }
 
+#upload-zone.file-selected {
+    border-color: #22c55e;
+    background-color: #f0fdf4;
+}
+
+/* ============================================================================
+   BEGIN TIEOUT ACTION
+   ============================================================================ */
+
+.begin-tieout-section {
+    display: flex;
+    justify-content: center;
+    padding: var(--spacing-xl) 2rem;
+}
+
+.begin-tieout-btn {
+    font-family: var(--font-grotesk);
+    font-size: 1rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 16px 48px;
+    cursor: pointer;
+    transition: all var(--transition-fast);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-sm);
+}
+
+.begin-tieout-btn:hover:not(:disabled) {
+    opacity: 0.9;
+    box-shadow: var(--shadow-md);
+    transform: translateY(-1px);
+}
+
+.begin-tieout-btn:active:not(:disabled) {
+    transform: translateY(0);
+    box-shadow: var(--shadow-sm);
+}
+
+.begin-tieout-btn:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
 /* ============================================================================
    PROGRESS DISPLAY
    ============================================================================ */

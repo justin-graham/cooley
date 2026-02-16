@@ -853,3 +853,57 @@ def cleanup_expired_sessions() -> int:
             deleted = cur.rowcount or 0
         conn.commit()
         return deleted
+
+
+def run_migrations() -> int:
+    """
+    Apply pending SQL migrations from the migrations/ directory.
+    Tracks applied migrations in a schema_migrations table.
+    Returns the number of newly applied migrations.
+    """
+    import glob
+
+    migrations_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'migrations')
+    if not os.path.isdir(migrations_dir):
+        logger.info("No migrations directory found, skipping.")
+        return 0
+
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS schema_migrations (
+                    filename TEXT PRIMARY KEY,
+                    applied_at TIMESTAMP DEFAULT NOW()
+                )
+            """)
+        conn.commit()
+
+    migration_files = sorted(glob.glob(os.path.join(migrations_dir, '*.sql')))
+    applied_count = 0
+
+    for filepath in migration_files:
+        filename = os.path.basename(filepath)
+
+        with get_db() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM schema_migrations WHERE filename = %s", (filename,))
+                if cur.fetchone():
+                    continue
+
+        with open(filepath, 'r') as f:
+            sql = f.read()
+
+        with get_db() as conn:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute(sql)
+                    cur.execute("INSERT INTO schema_migrations (filename) VALUES (%s)", (filename,))
+                conn.commit()
+                applied_count += 1
+                logger.info(f"Applied migration: {filename}")
+            except Exception as e:
+                conn.rollback()
+                logger.error(f"Migration {filename} failed: {e}")
+                raise
+
+    return applied_count
