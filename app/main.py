@@ -455,6 +455,16 @@ async def list_audits(user_id: str = Depends(auth.get_current_user)):
         raise HTTPException(status_code=500, detail="Failed to load audit history. Please try again.")
 
 
+@app.delete("/api/audits/{audit_id}")
+async def delete_audit(audit_id: str, request: Request, user_id: str = Depends(auth.get_current_user)):
+    """Delete an audit and all associated data."""
+    auth.validate_csrf(request)
+    deleted = db.delete_audit(audit_id, user_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Audit not found")
+    return JSONResponse(content={"ok": True})
+
+
 # ============================================================================
 # CAP TABLE TIE-OUT ENDPOINTS
 # ============================================================================

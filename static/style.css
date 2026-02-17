@@ -339,11 +339,13 @@ p {
 .martian-column-left {
     padding: 4rem 3.5rem;
     border-right: 1px solid #000;
+    min-width: 0;
 }
 
 /* Right column: generous padding */
 .martian-column-right {
     padding: 4rem 3.5rem;
+    min-width: 0;
 }
 
 /* Section labels (CORPORATE TIMELINE, CAP TABLE, etc.) */
@@ -524,8 +526,10 @@ p {
     font-weight: 600;
     color: var(--text);
     margin-bottom: var(--spacing-xs);
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
 }
 
 .upload-dropzone .secondary-text {
@@ -546,7 +550,8 @@ p {
 .begin-tieout-section {
     display: flex;
     justify-content: center;
-    padding: var(--spacing-xl) 2rem;
+    padding: 0;
+    background: var(--bg-pure);
 }
 
 .begin-tieout-btn {
@@ -1839,6 +1844,16 @@ button:focus-visible, .button:focus-visible {
     text-transform: uppercase;
     letter-spacing: 0.05em;
     margin: 0;
+}
+
+.audit-delete-btn {
+    cursor: pointer;
+    color: var(--gray-400);
+    padding: 4px 8px;
+    font-size: 1.1rem;
+}
+.audit-delete-btn:hover {
+    color: var(--accent);
 }
 
 .accordion-toggle {
@@ -3146,7 +3161,9 @@ button:focus-visible, .button:focus-visible {
 }
 
 .audit-item.disabled {
-    cursor: not-allowed;
+    cursor: default;
+}
+.audit-item.disabled .audit-header-content {
     opacity: 0.5;
 }
 

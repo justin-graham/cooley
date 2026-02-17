@@ -38,10 +38,29 @@ export async function loadPastAudits() {
                         <p class="audit-metadata">${date} • ${audit.document_count} documents ${badge}</p>
                         ${audit.upload_filename && audit.company_name ? `<p class="audit-filename">${escapeHtml(audit.upload_filename)}</p>` : ''}
                     </div>
+                    <span class="audit-delete-btn" role="button" title="Delete audit">&times;</span>
                     ${loadable ? '<span class="accordion-toggle">→</span>' : ''}
                 </div>
             </div>`;
         }).join('');
+
+        container.querySelectorAll('.audit-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const item = btn.closest('.audit-item');
+                const auditId = item.getAttribute('data-audit-id');
+                if (!confirm('Delete this audit? This cannot be undone.')) return;
+                try {
+                    await api.deleteAudit(auditId);
+                    item.remove();
+                    if (!container.querySelector('.audit-item')) {
+                        container.innerHTML = '<p style="color: var(--text-secondary);">No past audits yet. Upload your first document set to get started.</p>';
+                    }
+                } catch (err) {
+                    alert('Failed to delete audit: ' + err.message);
+                }
+            });
+        });
 
         container.querySelectorAll('.audit-item[data-loadable="true"]').forEach(item => {
             const handler = () => { const id = item.getAttribute('data-audit-id'); if (id) loadAuditById(id); };

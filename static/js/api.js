@@ -32,6 +32,7 @@ export const api = {
     getCapTable: (auditId, asOfDate) => apiJson(`/api/audits/${auditId}/captable?as_of_date=${asOfDate}`),
     getOptions: (auditId, asOfDate) => apiJson(`/api/audits/${auditId}/options?as_of_date=${asOfDate}`),
     getAudits: () => apiJson('/api/audits'),
+    deleteAudit: (auditId) => apiFetch(`/api/audits/${auditId}`, { method: 'DELETE' }),
     getDocument: (auditId, docId) => apiJson(`/api/audits/${auditId}/documents/${docId}`),
     getPreview: (auditId, type) => apiJson(`/api/audits/${auditId}/preview/${type}`),
     getDemoData: () => apiJson('/static/demo-data.json'),

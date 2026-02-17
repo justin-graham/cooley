@@ -347,6 +347,18 @@ def get_all_audits(user_id: Optional[str] = None) -> list[Dict[str, Any]]:
             return [dict(row) for row in rows]
 
 
+def delete_audit(audit_id: str, user_id: str) -> bool:
+    """Delete an audit owned by the given user. Returns True if a row was deleted."""
+    with get_db() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "DELETE FROM audits WHERE id = %s AND user_id = %s",
+                (audit_id, user_id)
+            )
+        conn.commit()
+        return cur.rowcount > 0
+
+
 # ============================================================================
 # CRUD Operations for Cap Table Tie-Out Feature
 # ============================================================================
