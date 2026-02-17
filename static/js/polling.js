@@ -4,14 +4,29 @@ import { api } from './api.js';
 import { appState, MAX_POLL_RETRIES, showView, setProgressState, showUiNotice, renderProgressError } from './state.js';
 import { renderResults } from './results.js';
 
+const POLL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
+
 export function startPolling() {
     appState.pollRetryCount = 0;
+    appState.pollStartTime = Date.now();
     appState.pollInterval = setInterval(checkStatus, 2000);
     checkStatus();
 }
 
 async function checkStatus() {
     if (!appState.currentAuditId) return;
+
+    // Safety timeout: stop polling after 10 minutes
+    if (Date.now() - appState.pollStartTime > POLL_TIMEOUT_MS) {
+        clearInterval(appState.pollInterval);
+        appState.pollInterval = null;
+        renderProgressError(
+            'Processing timeout',
+            'Processing is taking longer than expected. Your audit may still be running in the background.',
+            '<button class="btn btn-secondary" onclick="window._showUploadPage()" style="margin-right: 0.5rem;">Home</button><button class="btn btn-primary" onclick="window._loadPastAudits()">Check Past Audits</button>'
+        );
+        return;
+    }
 
     try {
         const data = await api.getStatus(appState.currentAuditId);
