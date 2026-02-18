@@ -1194,6 +1194,11 @@ def process_documents_task(audit_id: str, zip_path: str, captable_path: str = No
             except Exception as e:
                 logger.warning(f"Cap table tie-out failed for audit {audit_id}: {e}")
 
+            # Restore final status after cap table tie-out
+            audit = db.get_audit(audit_id)
+            final_status = 'needs_review' if audit and audit.get('review_required') else 'complete'
+            db.update_progress(audit_id, "Audit complete", pipeline_state=final_status)
+
         logger.info(f"Successfully completed audit {audit_id}")
 
     except Exception as e:
